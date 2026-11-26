@@ -309,7 +309,7 @@
 
                     <!-- Opzioni Tecniche Struttura + Pulizia Automatica Descrizione -->
                     <div class="pt-4 border-t border-[#e6dac3] space-y-3">
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                             <label class="flex items-start gap-2.5 p-2.5 rounded-xl bg-[#faf6ee] hover:bg-[#f3ebd9] cursor-pointer border border-[#e6dac3] transition-colors">
                                 <input type="checkbox" id="optForceHeader" checked class="mt-0.5 w-4 h-4 accent-[#ea580c] border-[#d8c9ad] rounded focus:ring-[#ea580c]">
                                 <div>
@@ -323,6 +323,14 @@
                                 <div>
                                     <span class="text-xs font-semibold text-[#28333a] block">Ignora righe vuote</span>
                                     <span class="text-[11px] text-[#28333a]/70 block">Scarta righe prive di dati</span>
+                                </div>
+                            </label>
+
+                            <label class="flex items-start gap-2.5 p-2.5 rounded-xl bg-orange-50/70 hover:bg-orange-100/70 cursor-pointer border border-orange-300 transition-colors">
+                                <input type="checkbox" id="optRemoveDuplicates" checked class="mt-0.5 w-4 h-4 accent-[#ea580c] border-[#d8c9ad] rounded focus:ring-[#ea580c]">
+                                <div>
+                                    <span class="text-xs font-bold text-[#28333a] block">Rimuovi duplicati</span>
+                                    <span class="text-[11px] text-[#9a3412] block">Elimina codici ripetuti (attivo)</span>
                                 </div>
                             </label>
                         </div>
@@ -531,8 +539,8 @@
                                     <i data-lucide="sparkles" class="w-5 h-5"></i>
                                 </div>
                                 <div>
-                                    <p class="text-xs text-[#28333a]/70 font-medium">Descrizioni Pulite / Codici Mod.</p>
-                                    <p id="statSanitizedCount" class="text-sm font-bold text-[#28333a]">0 desc. • 0 cod.</p>
+                                    <p class="text-xs text-[#28333a]/70 font-medium">Descrizioni / Codici / Duplicati</p>
+                                    <p id="statSanitizedCount" class="text-xs sm:text-sm font-bold text-[#28333a]">0 desc. • 0 cod. • 0 dup.</p>
                                 </div>
                             </div>
 
@@ -1159,6 +1167,7 @@
 
         const optForceHeader = document.getElementById('optForceHeader');
         const optRemoveEmpty = document.getElementById('optRemoveEmpty');
+        const optRemoveDuplicates = document.getElementById('optRemoveDuplicates');
 
         const dateModeSelect = document.getElementById('dateModeSelect');
         const dateModeHelperText = document.getElementById('dateModeHelperText');
@@ -1627,7 +1636,7 @@
             }
         });
 
-        [sheetSelector, optForceHeader, optRemoveEmpty].forEach(el => {
+        [sheetSelector, optForceHeader, optRemoveEmpty, optRemoveDuplicates].forEach(el => {
             el.addEventListener('change', () => {
                 if (currentWorkbook) {
                     updateCodeLiveSimulation();
@@ -1736,6 +1745,7 @@
 
             const forceHeader = optForceHeader.checked;
             const removeEmpty = optRemoveEmpty.checked;
+            const removeDuplicates = optRemoveDuplicates.checked;
             const dateMode = dateModeSelect.value;
             const userStartDate = customStartDate.value.trim();
             const userEndDate = customEndDate.value.trim();
@@ -1795,9 +1805,11 @@
             const processedDataRows = [];
             const collectedStartDates = [];
             const collectedEndDates = [];
+            const seenCodes = new Set();
             let anyHighlightApplied = false;
             let sanitizedDescCount = 0;
             let transformedCodeCount = 0;
+            let removedDuplicatesCount = 0;
 
             for (let i = 1; i < rawRows.length; i++) {
                 const r = rawRows[i];
@@ -1809,6 +1821,22 @@
                 // Colonna 1: CODICE + Trasformazioni Massive
                 const finalCol0 = applyCodePipeline(rawCol0);
                 const col0Modified = rawCol0 !== finalCol0;
+
+                // Controllo duplicati sulla Colonna 1 (CODICE)
+                if (finalCol0) {
+                    if (seenCodes.has(finalCol0)) {
+                        removedDuplicatesCount++;
+                        if (removeDuplicates) {
+                            warnings.push(`Riga ${excelRowNum}: codice duplicato "${finalCol0}" rimosso automaticamente.`);
+                            continue;
+                        } else {
+                            warnings.push(`Riga ${excelRowNum}: codice duplicato "${finalCol0}" mantenuto (rimozione duplicati disattivata).`);
+                        }
+                    } else {
+                        seenCodes.add(finalCol0);
+                    }
+                }
+
                 if (col0Modified) {
                     transformedCodeCount++;
                     anyHighlightApplied = true;
@@ -1898,10 +1926,10 @@
                 : 'export_anagrafica';
             outputFileName.value = `${baseFileName || 'export_anagrafica'}.csv`;
 
-            updateConverterDashboardUI(headerRow, processedDataRows, warnings, anyHighlightApplied, sanitizedDescCount, transformedCodeCount);
+            updateConverterDashboardUI(headerRow, processedDataRows, warnings, anyHighlightApplied, sanitizedDescCount, transformedCodeCount, removedDuplicatesCount);
         }
 
-        function updateConverterDashboardUI(headerRow, dataRows, warnings, anyHighlightApplied, sanitizedDescCount, transformedCodeCount) {
+        function updateConverterDashboardUI(headerRow, dataRows, warnings, anyHighlightApplied, sanitizedDescCount, transformedCodeCount, removedDuplicatesCount) {
             emptyStateGuide.classList.add('hidden');
             validationSection.classList.remove('hidden');
 
@@ -1912,7 +1940,7 @@
             }
 
             statTotalRows.textContent = dataRows.length.toLocaleString('it-IT');
-            statSanitizedCount.textContent = `${sanitizedDescCount} desc. • ${transformedCodeCount} cod.`;
+            statSanitizedCount.textContent = `${sanitizedDescCount} desc. • ${transformedCodeCount} cod. • ${removedDuplicatesCount} dup.`;
             statWarnCount.textContent = warnings.length;
 
             if (warnings.length === 0) {
