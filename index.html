@@ -309,7 +309,7 @@
 
                     <!-- Opzioni Tecniche Struttura + Pulizia Automatica Descrizione -->
                     <div class="pt-4 border-t border-[#e6dac3] space-y-3">
-                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                             <label class="flex items-start gap-2.5 p-2.5 rounded-xl bg-[#faf6ee] hover:bg-[#f3ebd9] cursor-pointer border border-[#e6dac3] transition-colors">
                                 <input type="checkbox" id="optForceHeader" checked class="mt-0.5 w-4 h-4 accent-[#ea580c] border-[#d8c9ad] rounded focus:ring-[#ea580c]">
                                 <div>
@@ -331,6 +331,14 @@
                                 <div>
                                     <span class="text-xs font-bold text-[#28333a] block">Rimuovi duplicati</span>
                                     <span class="text-[11px] text-[#9a3412] block">Elimina codici ripetuti (attivo)</span>
+                                </div>
+                            </label>
+
+                            <label class="flex items-start gap-2.5 p-2.5 rounded-xl bg-[#faf6ee] hover:bg-orange-50/70 cursor-pointer border border-[#e6dac3] hover:border-orange-300 transition-colors">
+                                <input type="checkbox" id="optThreeColsWithParent" class="mt-0.5 w-4 h-4 accent-[#ea580c] border-[#d8c9ad] rounded focus:ring-[#ea580c]">
+                                <div>
+                                    <span class="text-xs font-bold text-[#28333a] block">Excel a 3 colonne (con CODICE PADRE)</span>
+                                    <span class="text-[11px] text-[#28333a]/70 block">Legge Col. 1-3 e aggiunge le 2 date</span>
                                 </div>
                             </label>
                         </div>
@@ -1168,6 +1176,7 @@
         const optForceHeader = document.getElementById('optForceHeader');
         const optRemoveEmpty = document.getElementById('optRemoveEmpty');
         const optRemoveDuplicates = document.getElementById('optRemoveDuplicates');
+        const optThreeColsWithParent = document.getElementById('optThreeColsWithParent');
 
         const dateModeSelect = document.getElementById('dateModeSelect');
         const dateModeHelperText = document.getElementById('dateModeHelperText');
@@ -1636,7 +1645,7 @@
             }
         });
 
-        [sheetSelector, optForceHeader, optRemoveEmpty, optRemoveDuplicates].forEach(el => {
+        [sheetSelector, optForceHeader, optRemoveEmpty, optRemoveDuplicates, optThreeColsWithParent].forEach(el => {
             el.addEventListener('change', () => {
                 if (currentWorkbook) {
                     updateCodeLiveSimulation();
@@ -1746,6 +1755,7 @@
             const forceHeader = optForceHeader.checked;
             const removeEmpty = optRemoveEmpty.checked;
             const removeDuplicates = optRemoveDuplicates.checked;
+            const threeColsWithParent = optThreeColsWithParent.checked;
             const dateMode = dateModeSelect.value;
             const userStartDate = customStartDate.value.trim();
             const userEndDate = customEndDate.value.trim();
@@ -1763,7 +1773,7 @@
             for (let R = range.s.r; R <= range.e.r; ++R) {
                 const rowCells = [];
                 let rowHasContent = false;
-                const endCol = Math.max(range.e.c, 4);
+                const endCol = threeColsWithParent ? Math.max(range.e.c, 2) : Math.max(range.e.c, 4);
 
                 for (let C = 0; C <= endCol; ++C) {
                     const cellAddress = XLSX.utils.encode_cell({ r: R, c: C });
@@ -1786,7 +1796,11 @@
             }
 
             const warnings = [];
-            if (maxDetectedCols > 5) {
+            if (threeColsWithParent) {
+                if (maxDetectedCols > 3) {
+                    warnings.push(`Modalità 3 colonne attiva: rilevate ${maxDetectedCols} colonne nel file Excel, verranno lette solo le prime 3 (CODICE, DESCRIZIONE, CODICE PADRE) e completate con le date.`);
+                }
+            } else if (maxDetectedCols > 5) {
                 warnings.push(`Rilevate ${maxDetectedCols} colonne nel file Excel: verranno esportate solo le prime 5 colonne come da tracciato.`);
             }
 
@@ -1795,11 +1809,11 @@
             const headerRow = forceHeader
                 ? [...STANDARD_HEADERS]
                 : [
-                    firstRowStrings[0] || '',
-                    sanitizeDescriptionField(firstRowStrings[1] || ''),
-                    firstRowStrings[2] || '',
-                    firstRowStrings[3] || '',
-                    firstRowStrings[4] || ''
+                    firstRowStrings[0] || STANDARD_HEADERS[0],
+                    sanitizeDescriptionField(firstRowStrings[1] || STANDARD_HEADERS[1]),
+                    firstRowStrings[2] || STANDARD_HEADERS[2],
+                    threeColsWithParent ? STANDARD_HEADERS[3] : (firstRowStrings[3] || STANDARD_HEADERS[3]),
+                    threeColsWithParent ? STANDARD_HEADERS[4] : (firstRowStrings[4] || STANDARD_HEADERS[4])
                 ];
 
             const processedDataRows = [];
@@ -1853,9 +1867,9 @@
                 // Colonna 3: CODICE PADRE
                 const col2 = r[2] ? r[2].val : '';
 
-                // Colonne 4 e 5: DATE
-                const excelCol3 = r[3] ? normalizeDateValue(r[3].val, r[3]?.cellObj) : '';
-                const excelCol4 = r[4] ? normalizeDateValue(r[4].val, r[4]?.cellObj) : '';
+                // Colonne 4 e 5: DATE (se il flag 3 colonne è attivo, nel file Excel non ci sono date quindi partono vuote)
+                const excelCol3 = (!threeColsWithParent && r[3]) ? normalizeDateValue(r[3].val, r[3]?.cellObj) : '';
+                const excelCol4 = (!threeColsWithParent && r[4]) ? normalizeDateValue(r[4].val, r[4]?.cellObj) : '';
 
                 let finalCol3 = excelCol3;
                 let finalCol4 = excelCol4;
