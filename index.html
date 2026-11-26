@@ -1,0 +1,2474 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Convertitore per import anagrafiche</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Inter & JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <!-- SheetJS (xlsx) via CDN per lettura ed esportazione Excel -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        brand: {
+                            DEFAULT: '#28333a',
+                            dark: '#1d252a',
+                            accent: '#f3e0b5',
+                            accentDark: '#e5ca8f'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Personalizzazione scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #e2e6ed;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #b8c1cf;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+        .drop-zone-active {
+            border-color: #28333a !important;
+            background-color: #f3e0b5 !important;
+        }
+    </style>
+</head>
+<body class="bg-[#eceff3] text-[#28333a] min-h-screen flex flex-col antialiased selection:bg-[#f3e0b5] selection:text-[#28333a]">
+
+    <!-- Notifica Toast (sostituisce alert()) -->
+    <div id="toastContainer" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+    <!-- Header Istituzionale Tema Grigio Antracite & Beige Ambra -->
+    <header class="bg-gradient-to-r from-[#1d252a] via-[#28333a] to-[#323f48] text-white shadow-md border-b border-[#1d252a] sticky top-0 z-30">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <!-- Brand & Titolo -->
+            <div class="flex items-center justify-between gap-3">
+                <button type="button" onclick="navigateTo('home')" class="flex items-center gap-3.5 text-left group focus:outline-none">
+                    <div class="bg-[#f3e0b5]/15 border border-[#f3e0b5]/40 p-2.5 rounded-xl text-[#f3e0b5] shadow-inner group-hover:bg-[#f3e0b5]/25 transition-colors">
+                        <i data-lucide="database-zap" class="w-7 h-7"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-lg sm:text-xl font-extrabold tracking-tight text-white">Convertitore per import anagrafiche</h1>
+                        <p class="text-[#f3e0b5]/90 text-xs mt-0.5 font-medium">
+                            Suite di preparazione e confronto anagrafiche SI-ACT.
+                        </p>
+                    </div>
+                </button>
+            </div>
+
+            <!-- Barra Navigazione Pill & Torna alla Home -->
+            <div class="flex flex-wrap items-center gap-2">
+                <nav class="flex items-center bg-black/30 p-1 rounded-xl border border-white/10" aria-label="Navigazione moduli">
+                    <button type="button" id="navPillHome" onclick="navigateTo('home')" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all bg-[#f3e0b5] text-[#28333a] shadow-xs">
+                        <i data-lucide="layout-grid" class="w-3.5 h-3.5"></i>
+                        Home
+                    </button>
+                    <button type="button" id="navPillConverter" onclick="navigateTo('converter')" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all text-slate-200 hover:text-white hover:bg-white/10">
+                        <i data-lucide="file-spreadsheet" class="w-3.5 h-3.5"></i>
+                        Convertitore CSV
+                    </button>
+                    <button type="button" id="navPillCompare" onclick="navigateTo('compare')" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all text-slate-200 hover:text-white hover:bg-white/10">
+                        <i data-lucide="git-compare-arrows" class="w-3.5 h-3.5"></i>
+                        Confronto Anagrafiche
+                    </button>
+                </nav>
+
+                <button type="button" id="backToHomeBtn" onclick="navigateTo('home')" class="hidden inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-[#f3e0b5] hover:bg-[#e5ca8f] text-[#28333a] shadow-sm transition-all active:scale-95">
+                    <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i>
+                    Torna alla Home
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-10">
+
+        <!-- ===================================================================== -->
+        <!-- VISTA 0: SCHERMATA INIZIALE (HOME / SELEZIONE MACRO-FUNZIONALITÀ)     -->
+        <!-- ===================================================================== -->
+        <section id="viewHome" class="space-y-8">
+            <div class="text-center max-w-2xl mx-auto space-y-2.5 pt-2">
+                <span class="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full text-xs font-bold bg-[#f3e0b5] text-[#28333a] border border-[#e5ca8f] shadow-2xs">
+                    <i data-lucide="shield-check" class="w-3.5 h-3.5 text-[#28333a]"></i>
+                    Elaborazione 100% locale nel browser • Nessun dato inviato su server
+                </span>
+                <h2 class="text-2xl sm:text-3xl font-extrabold text-[#28333a] tracking-tight">
+                    Seleziona la funzionalità operativa
+                </h2>
+                <p class="text-sm sm:text-base text-slate-600">
+                    Scegli se convertire un file Excel nel formato CSV per l'importazione oppure confrontare due tracciati anagrafici per individuare aggiunte e rimozioni.
+                </p>
+            </div>
+
+            <!-- 2 Grandi Card Affiancate -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-8 max-w-5xl mx-auto pt-2">
+
+                <!-- Card 1: Convertitore XLSX -> CSV -->
+                <div onclick="navigateTo('converter')" class="group bg-white rounded-2xl border-2 border-[#d8dde6] hover:border-[#28333a] shadow-sm hover:shadow-xl hover:shadow-slate-900/10 p-6 sm:p-8 flex flex-col justify-between cursor-pointer transition-all duration-200 relative overflow-hidden">
+                    <div class="absolute top-0 right-0 w-36 h-36 bg-gradient-to-bl from-[#f3e0b5]/65 to-transparent rounded-bl-full pointer-events-none"></div>
+
+                    <div>
+                        <div class="flex items-center justify-between mb-5">
+                            <div class="w-14 h-14 rounded-2xl bg-[#28333a] text-[#f3e0b5] flex items-center justify-center shadow-md shadow-slate-900/20 group-hover:scale-105 transition-transform">
+                                <svg class="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
+                                    <polyline points="14 2 14 8 20 8"/>
+                                    <path d="M8 13h2"/><path d="M8 17h2"/><path d="M14 13h2"/><path d="M14 17h2"/>
+                                </svg>
+                            </div>
+                            <span class="text-xs font-bold uppercase tracking-wider text-[#28333a] bg-[#f3e0b5] border border-[#e5ca8f] px-3 py-1 rounded-full">
+                                Funzione 1 • Export CSV
+                            </span>
+                        </div>
+
+                        <h3 class="text-xl font-bold text-[#28333a] group-hover:text-black transition-colors mb-2.5">
+                            Convertitore XLSX &rarr; CSV
+                        </h3>
+                        <p class="text-sm text-slate-600 leading-relaxed mb-5">
+                            Trasforma un file Excel nel tracciato CSV a 5 colonne con doppi apici (<code class="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded text-[#28333a]">"..."</code>) e virgola, pulizia automatica delle descrizioni, regole massive sui codici e sovrascrittura date.
+                        </p>
+
+                        <ul class="space-y-2 text-xs text-slate-600 mb-6 border-t border-slate-100 pt-4">
+                            <li class="flex items-center gap-2">
+                                <i data-lucide="check-circle-2" class="w-4 h-4 text-[#28333a] shrink-0"></i>
+                                <span>Rimozione automatica virgole e apici nella <strong>Descrizione</strong></span>
+                            </li>
+                            <li class="flex items-center gap-2">
+                                <i data-lucide="check-circle-2" class="w-4 h-4 text-[#28333a] shrink-0"></i>
+                                <span>Trasformazioni massive su <strong>Codice</strong> (punti, caratteri, prefissi/suffissi)</span>
+                            </li>
+                        </ul>
+                    </div>
+
+                    <button type="button" class="w-full inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-sm font-bold text-[#f3e0b5] bg-[#28333a] group-hover:bg-[#1d252a] shadow-sm transition-colors">
+                        <span>Apri Convertitore</span>
+                        <i data-lucide="arrow-right" class="w-4 h-4 group-hover:translate-x-1 transition-transform"></i>
+                    </button>
+                </div>
+
+                <!-- Card 2: Confronto Anagrafiche (Delta SI-ACT) -->
+                <div onclick="navigateTo('compare')" class="group bg-white rounded-2xl border-2 border-[#d8dde6] hover:border-[#28333a] shadow-sm hover:shadow-xl hover:shadow-slate-900/10 p-6 sm:p-8 flex flex-col justify-between cursor-pointer transition-all duration-200 relative overflow-hidden">
+                    <div class="absolute top-0 right-0 w-36 h-36 bg-gradient-to-bl from-[#f3e0b5]/65 to-transparent rounded-bl-full pointer-events-none"></div>
+
+                    <div>
+                        <div class="flex items-center justify-between mb-5">
+                            <div class="w-14 h-14 rounded-2xl bg-[#f3e0b5] text-[#28333a] border border-[#e5ca8f] flex items-center justify-center shadow-md shadow-slate-900/10 group-hover:scale-105 transition-transform">
+                                <svg class="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <circle cx="18" cy="18" r="3"/>
+                                    <circle cx="6" cy="6" r="3"/>
+                                    <path d="M13 6h3a2 2 0 0 1 2 2v7"/>
+                                    <path d="M11 18H8a2 2 0 0 1-2-2V9"/>
+                                </svg>
+                            </div>
+                            <span class="text-xs font-bold uppercase tracking-wider text-[#28333a] bg-[#f3e0b5] border border-[#e5ca8f] px-3 py-1 rounded-full">
+                                Funzione 2 • Verifica Delta
+                            </span>
+                        </div>
+
+                        <h3 class="text-xl font-bold text-[#28333a] group-hover:text-black transition-colors mb-2.5">
+                            Confronto Anagrafiche (Delta SI-ACT)
+                        </h3>
+                        <p class="text-sm text-slate-600 leading-relaxed mb-5">
+                            Confronta il tracciato attualmente a sistema sul SI-ACT con il nuovo tracciato sulla prima colonna (Codice). Individua aggiunte (in verde) e rimozioni (in rosso) ed esporta il report Excel.
+                        </p>
+
+                        <ul class="space-y-2 text-xs text-slate-600 mb-6 border-t border-slate-100 pt-4">
+                            <li class="flex items-center gap-2">
+                                <span class="inline-block w-2.5 h-2.5 rounded-full bg-[#16a34a] shrink-0"></span>
+                                <span>Evidenziazione <strong class="text-green-700">in verde</strong> dei nuovi codici in aggiunta</span>
+                            </li>
+                            <li class="flex items-center gap-2">
+                                <span class="inline-block w-2.5 h-2.5 rounded-full bg-[#dc2626] shrink-0"></span>
+                                <span>Evidenziazione <strong class="text-red-700">in rosso</strong> dei codici in meno rispetto al sistema</span>
+                            </li>
+                        </ul>
+                    </div>
+
+                    <button type="button" class="w-full inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-sm font-bold text-[#28333a] bg-[#f3e0b5] group-hover:bg-[#e5ca8f] border border-[#e5ca8f] shadow-sm transition-colors">
+                        <span>Apri Confronto</span>
+                        <i data-lucide="arrow-right" class="w-4 h-4 group-hover:translate-x-1 transition-transform"></i>
+                    </button>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- ===================================================================== -->
+        <!-- VISTA 1: MODULO CONVERTITORE XLSX -> CSV                              -->
+        <!-- ===================================================================== -->
+        <section id="viewConverter" class="hidden space-y-6">
+
+            <!-- Intestazione Modulo 1 -->
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-1">
+                <div>
+                    <h2 class="text-xl font-extrabold text-[#28333a] flex items-center gap-2">
+                        <span class="w-2.5 h-6 rounded-full bg-[#28333a] border-r-2 border-[#f3e0b5]"></span>
+                        Convertitore XLSX &rarr; CSV (Tracciato 5 Colonne)
+                    </h2>
+                    <p class="text-xs sm:text-sm text-slate-600 mt-0.5">
+                        Carica il file Excel, trasforma i codici, imposta le date di validità ed esporta il CSV sanificato con doppi apici e virgola.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Griglia Configurazione Principale: Step 1 (Sorgente Excel) + Step 2 (Trasformazioni Massive Codice) -->
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+                <!-- STEP 1: Caricamento File Excel -->
+                <div class="lg:col-span-6 bg-white rounded-2xl shadow-sm border border-[#d8dde6] p-5 sm:p-6 flex flex-col justify-between space-y-5">
+                    <div>
+                        <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
+                            <h3 class="text-base font-bold text-[#28333a] flex items-center gap-2">
+                                <span class="w-6 h-6 rounded-full bg-[#28333a] text-[#f3e0b5] text-xs font-bold flex items-center justify-center">1</span>
+                                Sorgente Dati Excel (.xlsx / .xls)
+                            </h3>
+
+                            <div class="flex items-center gap-2">
+                                <button id="loadDemoBtn" type="button" class="inline-flex items-center gap-1.5 text-xs font-bold text-[#28333a] hover:bg-[#e5ca8f] bg-[#f3e0b5] border border-[#e5ca8f] px-3 py-1.5 rounded-lg transition-colors">
+                                    <i data-lucide="play-circle" class="w-3.5 h-3.5"></i>
+                                    Carica dati demo
+                                </button>
+                                <button id="downloadSampleBtn" type="button" class="inline-flex items-center gap-1.5 text-xs font-medium text-slate-700 hover:text-[#28333a] bg-slate-100 hover:bg-slate-200/70 border border-slate-300 px-3 py-1.5 rounded-lg transition-colors" title="Scarica un file Excel di esempio sul tuo PC">
+                                    <i data-lucide="file-down" class="w-3.5 h-3.5"></i>
+                                    Scarica XLSX esempio
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Drop Zone -->
+                        <div id="dropZone" class="border-2 border-dashed border-slate-300 hover:border-[#28333a] rounded-xl p-6 text-center cursor-pointer transition-all bg-[#f6f8fb] hover:bg-[#f3e0b5]/35 group">
+                            <input type="file" id="fileInput" accept=".xlsx,.xls" class="hidden">
+                            <div class="mx-auto w-12 h-12 rounded-full bg-[#28333a] shadow-sm flex items-center justify-center text-[#f3e0b5] group-hover:scale-105 transition-transform mb-3">
+                                <i data-lucide="upload-cloud" class="w-6 h-6"></i>
+                            </div>
+                            <p class="text-sm font-semibold text-[#28333a]">
+                                Trascina qui il tuo file <span class="underline decoration-[#e5ca8f] decoration-2">.xlsx</span> o <span class="underline decoration-[#e5ca8f] decoration-2">.xls</span>
+                            </p>
+                            <p class="text-xs text-slate-500 mt-1">
+                                oppure <span class="underline text-[#28333a] font-medium">clicca per sfogliare</span> • Preservazione automatica zeri iniziali
+                            </p>
+                        </div>
+
+                        <!-- File Caricato Info Bar -->
+                        <div id="fileInfoBar" class="hidden mt-4 p-3 rounded-xl bg-[#f3e0b5]/45 border border-[#e5ca8f] flex flex-wrap items-center justify-between gap-3">
+                            <div class="flex items-center gap-2.5 min-w-0">
+                                <div class="w-9 h-9 rounded-lg bg-[#28333a] text-[#f3e0b5] flex items-center justify-center shrink-0">
+                                    <i data-lucide="file-check-2" class="w-5 h-5"></i>
+                                </div>
+                                <div class="min-w-0">
+                                    <p id="loadedFileName" class="text-sm font-semibold text-[#28333a] truncate">file.xlsx</p>
+                                    <p id="loadedFileMeta" class="text-xs text-slate-600">Dimensione • Fogli trovati</p>
+                                </div>
+                            </div>
+
+                            <!-- Selettore Foglio Excel -->
+                            <div class="flex items-center gap-2">
+                                <label for="sheetSelector" class="text-xs font-semibold text-[#28333a] whitespace-nowrap">Foglio:</label>
+                                <select id="sheetSelector" class="text-xs sm:text-sm bg-white border border-slate-300 text-[#28333a] rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-[#28333a] font-medium">
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Opzioni Tecniche Struttura + Pulizia Automatica Descrizione -->
+                    <div class="pt-4 border-t border-slate-200/80 space-y-3">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                            <label class="flex items-start gap-2.5 p-2.5 rounded-xl bg-[#f6f8fb] hover:bg-slate-200/60 cursor-pointer border border-[#d8dde6] transition-colors">
+                                <input type="checkbox" id="optForceHeader" checked class="mt-0.5 w-4 h-4 accent-[#28333a] border-slate-300 rounded focus:ring-[#28333a]">
+                                <div>
+                                    <span class="text-xs font-semibold text-[#28333a] block">Intestazione fissa 5 col.</span>
+                                    <span class="text-[11px] text-slate-500 block">Impone header ufficiale SI-ACT</span>
+                                </div>
+                            </label>
+
+                            <label class="flex items-start gap-2.5 p-2.5 rounded-xl bg-[#f6f8fb] hover:bg-slate-200/60 cursor-pointer border border-[#d8dde6] transition-colors">
+                                <input type="checkbox" id="optRemoveEmpty" checked class="mt-0.5 w-4 h-4 accent-[#28333a] border-slate-300 rounded focus:ring-[#28333a]">
+                                <div>
+                                    <span class="text-xs font-semibold text-[#28333a] block">Ignora righe vuote</span>
+                                    <span class="text-[11px] text-slate-500 block">Scarta righe prive di dati</span>
+                                </div>
+                            </label>
+                        </div>
+
+                        <!-- Indicatore Pulizia Automatica Descrizione (Colonna 2) -->
+                        <div class="flex items-start gap-2.5 text-xs bg-[#f3e0b5]/55 border border-[#e5ca8f] text-[#28333a] px-3 py-2.5 rounded-xl">
+                            <i data-lucide="shield-alert" class="w-4 h-4 text-[#28333a] shrink-0 mt-0.5"></i>
+                            <div>
+                                <span class="font-bold">Sanificazione automatica DESCRIZIONE (Col. 2) attiva:</span>
+                                <span class="text-slate-700"> rimuove automaticamente virgole (<code class="font-mono bg-white/90 px-1 rounded">,</code>), doppi apici (<code class="font-mono bg-white/90 px-1 rounded">"</code>), apostrofi/apici singoli (<code class="font-mono bg-white/90 px-1 rounded">'</code> <code class="font-mono bg-white/90 px-1 rounded">’</code> <code class="font-mono bg-white/90 px-1 rounded">`</code>) e spazi multipli per evitare errori di importazione CSV.</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- STEP 2: TRASFORMAZIONI MASSIVE CODICE (COLONNA 1) -->
+                <div class="lg:col-span-6 bg-white rounded-2xl shadow-sm border border-[#d8dde6] p-5 sm:p-6 flex flex-col justify-between space-y-4">
+                    <div class="space-y-4">
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <h3 class="text-base font-bold text-[#28333a] flex items-center gap-2">
+                                <span class="w-6 h-6 rounded-full bg-[#28333a] text-[#f3e0b5] text-xs font-bold flex items-center justify-center">2</span>
+                                Trasformazioni Massive Codice (Colonna 1)
+                            </h3>
+
+                            <div class="flex items-center gap-2">
+                                <span id="codeRulesCountBadge" class="text-xs font-bold px-2.5 py-1 rounded-full bg-slate-100 text-[#28333a] border border-[#d8dde6]">
+                                    0 regole attive
+                                </span>
+                                <button type="button" id="clearAllCodeRulesBtn" onclick="clearAllCodeRules()" class="hidden inline-flex items-center gap-1 text-xs font-semibold text-rose-700 hover:text-rose-900 bg-rose-50 hover:bg-rose-100 border border-rose-200 px-2.5 py-1 rounded-lg transition-colors">
+                                    <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                                    Azzera
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Configuratore Azione Massiva (Default: Nessuna azione) -->
+                        <div class="bg-[#f6f8fb] p-4 rounded-xl border border-[#d8dde6] space-y-3.5">
+                            <div>
+                                <label for="codeRuleTypeSelect" class="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1.5">
+                                    Operazione massiva sul Codice:
+                                </label>
+                                <div class="relative">
+                                    <select id="codeRuleTypeSelect" class="w-full appearance-none bg-white border border-slate-300 text-[#28333a] font-semibold text-xs sm:text-sm rounded-xl pl-3.5 pr-9 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#28333a] cursor-pointer">
+                                        <option value="none" selected>Nessuna azione (non toccare il codice)</option>
+                                        <option value="insert_dot">Aggiungi punto (.) in posizione X</option>
+                                        <option value="remove_all_dots">Rimuovi tutti i punti (.)</option>
+                                        <option value="remove_char">Rimuovi un determinato carattere</option>
+                                        <option value="remove_start_n">Rimuovi N caratteri all'inizio</option>
+                                        <option value="remove_end_n">Rimuovi N caratteri alla fine</option>
+                                    </select>
+                                    <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2.5 text-[#28333a]">
+                                        <i data-lucide="chevron-down" class="w-4 h-4"></i>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Parametro Dinamico (nascosto/disabilitato quando 'none') + Bottone Applica -->
+                            <div id="codeRuleActionRow" class="hidden grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+                                <div id="codeRuleParamWrapper" class="sm:col-span-7">
+                                    <label id="codeRuleParamLabel" for="codeRuleParamInput" class="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1.5">
+                                        Dopo quanti caratteri (Pos. X):
+                                    </label>
+                                    <input type="number" id="codeRuleParamInput" value="6" min="1" max="50" class="w-full text-xs sm:text-sm font-mono bg-white border border-slate-300 text-[#28333a] rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#28333a]">
+                                </div>
+
+                                <div id="codeRuleBtnWrapper" class="sm:col-span-5">
+                                    <button type="button" id="addCodeRuleBtn" class="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold text-[#f3e0b5] bg-[#28333a] hover:bg-[#1d252a] shadow-xs transition-all active:scale-95">
+                                        <i data-lucide="plus" class="w-4 h-4"></i>
+                                        Applica regola
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Simulazione Live Prima -> Dopo -->
+                            <div class="bg-white border border-[#d8dde6] rounded-xl px-3.5 py-2.5 flex items-center justify-between gap-2">
+                                <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Anteprima Codice:</span>
+                                <div class="font-mono text-xs flex items-center gap-2 truncate">
+                                    <span id="codeSimBefore" class="text-slate-600">19092201</span>
+                                    <i data-lucide="arrow-right" class="w-3.5 h-3.5 text-[#28333a] shrink-0"></i>
+                                    <span id="codeSimAfter" class="font-bold text-[#28333a]">19092201 (invariato)</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Lista Regole Attive in Pipeline -->
+                        <div id="activeCodeRulesContainer" class="hidden space-y-2">
+                            <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Sequenza regole applicate in ordine (1 &rarr; N):</p>
+                            <div id="activeCodeRulesList" class="flex flex-wrap items-center gap-2">
+                                <!-- Popolato dinamicamente -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="pt-2 border-t border-slate-200/80 text-[11px] text-slate-500 flex items-center justify-between">
+                        <span>Stato trasformazione codici:</span>
+                        <span id="codeStatusFooterText" class="font-semibold text-[#28333a]">Nessuna modifica attiva</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- STEP 3: CONFIGURAZIONE DATE DI VALIDITÀ (COLONNE 4 E 5) -->
+            <div class="bg-white rounded-2xl shadow-sm border border-[#d8dde6] p-5 sm:p-6 space-y-4">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <div class="flex items-center gap-2.5">
+                        <span class="w-6 h-6 rounded-full bg-[#28333a] text-[#f3e0b5] text-xs font-bold flex items-center justify-center shrink-0">3</span>
+                        <div>
+                            <h3 class="text-base font-bold text-[#28333a]">Configurazione Date di Validità (Colonne 4 e 5)</h3>
+                            <p class="text-xs text-slate-500">Imposta le date di inizio e fine validità oppure scegli come leggerle dal tracciato.</p>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-3">
+                        <span class="hidden sm:inline text-xs text-slate-500">File suggerito: <strong id="previewSuggestedNameBadge" class="font-mono text-[#28333a]">HSP11BIS_31_07_2007_31_12_3000.csv</strong></span>
+                        <span class="text-[11px] font-mono font-bold text-[#28333a] bg-[#f3e0b5] border border-[#e5ca8f] px-2.5 py-0.5 rounded-md">
+                            Formato: AAAA-MM-GG
+                        </span>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+                    <!-- Menù a tendina modalità date -->
+                    <div class="lg:col-span-5">
+                        <label for="dateModeSelect" class="block text-xs font-bold text-[#28333a] uppercase tracking-wider mb-1.5">
+                            Modalità di applicazione delle date:
+                        </label>
+                        <div class="relative">
+                            <select id="dateModeSelect" class="w-full appearance-none bg-[#f3e0b5]/45 border-2 border-[#28333a] text-[#28333a] font-semibold text-xs sm:text-sm rounded-xl pl-3.5 pr-10 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#28333a] cursor-pointer transition-colors">
+                                <option value="overwrite_all" selected>Sovrascrivi tutte le date con quelle inserite</option>
+                                <option value="overwrite_empty">Sovrascrivi solo se le celle data sono vuote</option>
+                                <option value="read_excel">Leggi le date direttamente dal file Excel</option>
+                            </select>
+                            <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-[#28333a]">
+                                <i data-lucide="chevron-down" class="w-4 h-4"></i>
+                            </div>
+                        </div>
+                        <p id="dateModeHelperText" class="text-xs text-slate-600 mt-1.5">
+                            Tutte le righe del CSV riceveranno esattamente le date impostate nei due campi a fianco.
+                        </p>
+                    </div>
+
+                    <!-- Pannello Campi Date + Pulsanti Rapidi -->
+                    <div id="customDatesPanel" class="lg:col-span-7 p-4 rounded-xl bg-[#f6f8fb] border border-[#d8dde6] transition-all duration-200 space-y-3">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <!-- Data Inizio Validità -->
+                            <div>
+                                <div class="flex items-center justify-between mb-1.5">
+                                    <label for="customStartDate" class="text-xs font-bold text-[#28333a]">Inizio Validità (Col. 4)</label>
+                                    <div class="flex items-center gap-1">
+                                        <button type="button" id="btnStartDefault" class="text-[10px] font-semibold px-2 py-0.5 rounded bg-white border border-slate-300 hover:border-[#28333a] hover:text-[#28333a] text-slate-700 transition-colors">
+                                            2007-07-31
+                                        </button>
+                                        <button type="button" id="btnStartToday" class="text-[10px] font-semibold px-2 py-0.5 rounded bg-white border border-slate-300 hover:border-[#28333a] hover:text-[#28333a] text-slate-700 transition-colors">
+                                            Oggi
+                                        </button>
+                                    </div>
+                                </div>
+                                <input type="date" id="customStartDate" value="2007-07-31" max="9999-12-31" class="w-full text-xs sm:text-sm font-mono bg-white border border-slate-300 text-[#28333a] rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#28333a] disabled:bg-slate-200/70 disabled:text-slate-400 disabled:cursor-not-allowed">
+                            </div>
+
+                            <!-- Data Fine Validità -->
+                            <div>
+                                <div class="flex items-center justify-between mb-1.5">
+                                    <label for="customEndDate" class="text-xs font-bold text-[#28333a]">Fine Validità (Col. 5)</label>
+                                    <div class="flex items-center gap-1">
+                                        <button type="button" id="btnEndUnlimited" class="text-[10px] font-bold px-2 py-0.5 rounded bg-[#28333a] hover:bg-[#1d252a] text-[#f3e0b5] transition-colors">
+                                            3000-12-31
+                                        </button>
+                                        <button type="button" id="btnEndToday" class="text-[10px] font-semibold px-2 py-0.5 rounded bg-white border border-slate-300 hover:border-[#28333a] hover:text-[#28333a] text-slate-700 transition-colors">
+                                            Oggi
+                                        </button>
+                                    </div>
+                                </div>
+                                <input type="date" id="customEndDate" value="3000-12-31" max="9999-12-31" class="w-full text-xs sm:text-sm font-mono bg-white border border-slate-300 text-[#28333a] rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#28333a] disabled:bg-slate-200/70 disabled:text-slate-400 disabled:cursor-not-allowed">
+                            </div>
+                        </div>
+
+                        <div id="excelDatesNotice" class="hidden flex items-center gap-2 text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                            <i data-lucide="info" class="w-4 h-4 text-amber-700 shrink-0"></i>
+                            <span>Modalità lettura diretta attiva: verranno utilizzate e convertite in <code class="font-mono">AAAA-MM-GG</code> le date presenti nel file Excel.</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Risultati Conversione: KPI, Doppia Anteprima e Box Finale Esportazione -->
+            <div id="validationSection" class="hidden space-y-6">
+
+                <!-- Barra KPI & Esportazione Rapida Superiore -->
+                <div class="bg-white rounded-2xl shadow-sm border border-[#d8dde6] p-5">
+                    <div class="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+                        <!-- Statistiche -->
+                        <div class="flex flex-wrap items-center gap-4 sm:gap-6">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-xl bg-[#28333a] text-[#f3e0b5] flex items-center justify-center font-bold">
+                                    <i data-lucide="rows-3" class="w-5 h-5"></i>
+                                </div>
+                                <div>
+                                    <p class="text-xs text-slate-500 font-medium">Righe Dati CSV</p>
+                                    <p id="statTotalRows" class="text-lg font-bold text-[#28333a]">0</p>
+                                </div>
+                            </div>
+
+                            <div class="h-8 w-px bg-slate-200 hidden sm:block"></div>
+
+                            <div class="flex items-center gap-3">
+                                <div id="statSanitizedIconBox" class="w-10 h-10 rounded-xl bg-[#f3e0b5] text-[#28333a] border border-[#e5ca8f] flex items-center justify-center">
+                                    <i data-lucide="sparkles" class="w-5 h-5"></i>
+                                </div>
+                                <div>
+                                    <p class="text-xs text-slate-500 font-medium">Descrizioni Pulite / Codici Mod.</p>
+                                    <p id="statSanitizedCount" class="text-sm font-bold text-[#28333a]">0 desc. • 0 cod.</p>
+                                </div>
+                            </div>
+
+                            <div class="h-8 w-px bg-slate-200 hidden sm:block"></div>
+
+                            <div class="flex items-center gap-3">
+                                <div id="statWarnIconBox" class="w-10 h-10 rounded-xl bg-slate-100 text-slate-500 flex items-center justify-center">
+                                    <i data-lucide="alert-triangle" class="w-5 h-5"></i>
+                                </div>
+                                <div>
+                                    <p class="text-xs text-slate-500 font-medium">Avvisi Diagnostica</p>
+                                    <p id="statWarnCount" class="text-lg font-bold text-[#28333a]">0</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Pulsante Copia Rapido -->
+                        <div class="flex items-center gap-2.5">
+                            <button id="copyCsvBtn" type="button" class="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-[#28333a] bg-white hover:bg-slate-50 border border-slate-300 shadow-xs transition-all active:scale-95">
+                                <i data-lucide="copy" class="w-4 h-4 text-slate-500"></i>
+                                Copia CSV negli appunti
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Lista dettagliata avvisi -->
+                    <div id="warningsListBox" class="hidden mt-4 pt-3.5 border-t border-slate-100">
+                        <div class="bg-amber-50/90 border border-amber-200 rounded-xl p-3.5">
+                            <p class="text-xs font-semibold text-amber-900 flex items-center gap-1.5 mb-1.5">
+                                <i data-lucide="info" class="w-4 h-4 text-amber-600"></i>
+                                Diagnostica e controlli di validazione:
+                            </p>
+                            <ul id="warningsList" class="text-xs text-amber-800 space-y-1 max-h-28 overflow-y-auto pl-5 list-disc">
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Anteprima con Toggle Vista Tabellare / Codice Raw CSV -->
+                <div class="bg-white rounded-2xl shadow-sm border border-[#d8dde6] overflow-hidden">
+                    <div class="px-5 py-3.5 border-b border-[#d8dde6] flex flex-wrap items-center justify-between gap-3 bg-[#f6f8fb]">
+                        <div class="flex flex-wrap items-center gap-2.5">
+                            <div class="inline-flex rounded-xl bg-slate-200/80 p-1">
+                                <button type="button" id="toggleTableBtn" onclick="switchConverterPreview('table')" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-[#28333a] text-[#f3e0b5] shadow-xs transition-all">
+                                    <i data-lucide="table" class="w-3.5 h-3.5"></i>
+                                    Vista Tabellare
+                                </button>
+                                <button type="button" id="toggleRawBtn" onclick="switchConverterPreview('raw')" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-slate-600 hover:text-[#28333a] transition-all">
+                                    <i data-lucide="code-2" class="w-3.5 h-3.5"></i>
+                                    Codice Raw CSV
+                                </button>
+                            </div>
+
+                            <span id="dateHighlightLegend" class="hidden sm:inline-flex items-center gap-1.5 text-[11px] font-bold text-[#28333a] bg-[#f3e0b5] border border-[#e5ca8f] px-2.5 py-1 rounded-md">
+                                <span class="w-2 h-2 rounded-full bg-[#28333a]"></span>
+                                Celle elaborate / date sovrascritte
+                            </span>
+                        </div>
+
+                        <span id="tablePreviewBadge" class="text-xs text-slate-500 font-medium">Prime 100 righe</span>
+                    </div>
+
+                    <!-- Pannello Vista Tabellare -->
+                    <div id="converterTablePanel" class="overflow-x-auto max-h-[480px]">
+                        <table class="w-full text-left border-collapse">
+                            <thead class="bg-slate-100 sticky top-0 z-10 border-b border-slate-200">
+                                <tr id="previewTableHead" class="text-[11px] font-bold text-slate-600 uppercase tracking-wider">
+                                </tr>
+                            </thead>
+                            <tbody id="previewTableBody" class="divide-y divide-slate-100 text-xs font-mono text-[#28333a]">
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Pannello Vista Codice Raw CSV con Numeri di Riga -->
+                    <div id="converterRawPanel" class="hidden bg-[#1d252a] p-4">
+                        <div class="w-full max-h-[460px] overflow-auto font-mono text-xs leading-relaxed">
+                            <table class="w-full border-collapse">
+                                <tbody id="rawCsvLinesBody">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CARD FINALE DI ESPORTAZIONE CSV (IN FONDO ALLA PAGINA) -->
+                <div class="bg-gradient-to-r from-[#f3e0b5]/55 via-white to-[#f3e0b5]/55 rounded-2xl border-2 border-[#28333a]/30 shadow-md p-6 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                    <div class="flex items-start sm:items-center gap-3.5">
+                        <div class="w-12 h-12 rounded-2xl bg-[#28333a] text-[#f3e0b5] flex items-center justify-center shrink-0 shadow-sm">
+                            <i data-lucide="file-check" class="w-6 h-6"></i>
+                        </div>
+                        <div>
+                            <h3 class="text-base font-extrabold text-[#28333a]">Esportazione Tracciato CSV Pronto</h3>
+                            <p class="text-xs text-slate-600 mt-0.5">
+                                Tutti i 5 campi sono racchiusi tra doppi apici <code class="font-mono bg-[#f3e0b5] px-1 rounded text-[#28333a]">"..."</code> e delimitati da virgola, con descrizioni ripulite e codici aggiornati.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                        <div class="flex items-center bg-white border-2 border-slate-300 focus-within:border-[#28333a] rounded-xl px-3.5 py-2 transition-all">
+                            <i data-lucide="file-text" class="w-4 h-4 text-[#28333a] mr-2 shrink-0"></i>
+                            <input type="text" id="outputFileName" class="bg-transparent text-xs sm:text-sm font-mono font-semibold text-[#28333a] focus:outline-none w-full sm:w-64" placeholder="HSP11BIS_31_07_2007_31_12_3000.csv">
+                        </div>
+
+                        <button id="downloadCsvBtn" type="button" class="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-sm font-extrabold text-[#f3e0b5] bg-[#28333a] hover:bg-[#1d252a] shadow-md shadow-slate-900/20 transition-all active:scale-95 whitespace-nowrap">
+                            <i data-lucide="download" class="w-5 h-5"></i>
+                            Esporta file CSV
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stato Vuoto Iniziale Convertitore -->
+            <div id="emptyStateGuide" class="bg-white rounded-2xl shadow-sm border border-[#d8dde6] p-6 sm:p-8">
+                <div class="max-w-3xl mx-auto text-center space-y-2.5">
+                    <h3 class="text-base sm:text-lg font-bold text-[#28333a]">Tracciato CSV a 5 colonne con doppi apici e virgola</h3>
+                    <p class="text-xs sm:text-sm text-slate-600">
+                        Carica il tuo file Excel oppure premi <strong class="text-[#28333a] bg-[#f3e0b5] px-1.5 py-0.5 rounded">"Carica dati demo"</strong> per testare subito la pulizia automatica delle descrizioni (virgole e apici) e le trasformazioni massive sui codici.
+                    </p>
+                </div>
+
+                <div class="mt-5 bg-[#28333a] rounded-xl p-4 overflow-x-auto max-w-4xl mx-auto border border-[#1d252a]">
+                    <p class="text-[11px] uppercase tracking-wider text-slate-300 font-semibold mb-2">Esempio output CSV generato:</p>
+                    <pre class="font-mono text-xs text-[#f3e0b5] leading-relaxed">"CODICE","DESCRIZIONE","CODICE PADRE","INIZIO_VALIDITA'(AAAA-MM-GG)","FINE_VALIDITA'(AAAA-MM-GG)"
+"19092201","OSPEDALE GARIBALDI - CENTRO","190922","2007-07-31","3000-12-31"
+"19092204","OSPEDALE GARIBALDI - NESIMA","190922","2007-07-31","3000-12-31"</pre>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===================================================================== -->
+        <!-- VISTA 2: MODULO CONFRONTO ANAGRAFICHE (DELTA SI-ACT)                  -->
+        <!-- ===================================================================== -->
+        <section id="viewCompare" class="hidden space-y-6">
+
+            <!-- Intestazione Modulo 2 -->
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                    <h2 class="text-xl font-extrabold text-[#28333a] flex items-center gap-2">
+                        <span class="w-2.5 h-6 rounded-full bg-[#28333a] border-r-2 border-[#f3e0b5]"></span>
+                        Confronto Anagrafiche (Delta SI-ACT)
+                    </h2>
+                    <p class="text-xs sm:text-sm text-slate-600 mt-0.5">
+                        Confronta i codici (Colonna 1) tra il tracciato attualmente a sistema sul SI-ACT e il nuovo tracciato da importare.
+                    </p>
+                </div>
+
+                <div class="flex items-center gap-2 self-start sm:self-center">
+                    <button id="loadCompareDemoBtn" type="button" class="inline-flex items-center gap-1.5 text-xs font-bold text-[#28333a] hover:bg-[#e5ca8f] bg-[#f3e0b5] border border-[#e5ca8f] px-3.5 py-2 rounded-xl transition-colors">
+                        <i data-lucide="sparkles" class="w-4 h-4"></i>
+                        Carica Esempio Confronto (Demo)
+                    </button>
+                    <button id="resetCompareBtn" type="button" class="hidden inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-[#28333a] bg-white hover:bg-slate-100 border border-slate-300 px-3 py-2 rounded-xl transition-colors">
+                        <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
+                        Azzera
+                    </button>
+                </div>
+            </div>
+
+            <!-- Due Dropzone Affiancate -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+                <!-- SLOT 1 (Sinistra): Tracciato Attualmente a Sistema (SI-ACT) -->
+                <div class="bg-white rounded-2xl shadow-sm border-2 border-[#d8dde6] p-5 sm:p-6 flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center justify-between gap-2 mb-3">
+                            <div class="flex items-center gap-2.5">
+                                <span class="w-7 h-7 rounded-lg bg-[#28333a] text-[#f3e0b5] text-xs font-extrabold flex items-center justify-center">1</span>
+                                <div>
+                                    <h3 class="text-sm sm:text-base font-bold text-[#28333a]">Tracciato Attualmente a Sistema (SI-ACT)</h3>
+                                    <p class="text-xs text-slate-500">Stato attuale presente sul portale SI-ACT</p>
+                                </div>
+                            </div>
+                            <span id="compareSlot1Badge" class="hidden text-[11px] font-mono font-bold bg-slate-100 text-[#28333a] border border-slate-300 px-2.5 py-0.5 rounded-full">
+                                0 codici
+                            </span>
+                        </div>
+
+                        <div id="compareDropZone1" class="border-2 border-dashed border-slate-300 hover:border-[#28333a] rounded-xl p-6 text-center cursor-pointer transition-all bg-[#f6f8fb] hover:bg-[#f3e0b5]/35 group">
+                            <input type="file" id="compareFileInput1" accept=".xlsx,.xls" class="hidden">
+                            <div class="mx-auto w-11 h-11 rounded-full bg-white shadow-sm border border-slate-200 flex items-center justify-center text-[#28333a] group-hover:scale-105 transition-all mb-2.5">
+                                <i data-lucide="server" class="w-5 h-5"></i>
+                            </div>
+                            <p class="text-sm font-semibold text-[#28333a]">
+                                Carica Excel <span class="underline">Attuale SI-ACT</span> (.xlsx / .xls)
+                            </p>
+                            <p class="text-xs text-slate-500 mt-1">
+                                Trascina qui il file oppure clicca per selezionarlo
+                            </p>
+                        </div>
+
+                        <!-- Info File 1 Caricato -->
+                        <div id="compareFile1Info" class="hidden mt-3.5 p-3 rounded-xl bg-slate-100/90 border border-slate-300/80 flex items-center justify-between gap-2">
+                            <div class="flex items-center gap-2.5 min-w-0">
+                                <div class="w-8 h-8 rounded-lg bg-[#28333a] text-[#f3e0b5] flex items-center justify-center shrink-0">
+                                    <i data-lucide="file-check" class="w-4 h-4"></i>
+                                </div>
+                                <div class="min-w-0">
+                                    <p id="compareFile1Name" class="text-xs sm:text-sm font-bold text-[#28333a] truncate">sistema_siact.xlsx</p>
+                                    <p id="compareFile1Meta" class="text-[11px] text-slate-600">0 righe caricate</p>
+                                </div>
+                            </div>
+                            <span class="text-[10px] font-bold uppercase tracking-wider text-[#28333a] bg-white border border-slate-200 px-2 py-0.5 rounded">Base Sistema</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SLOT 2 (Destra): Nuovo Tracciato da Importare -->
+                <div class="bg-white rounded-2xl shadow-sm border-2 border-[#d8dde6] p-5 sm:p-6 flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center justify-between gap-2 mb-3">
+                            <div class="flex items-center gap-2.5">
+                                <span class="w-7 h-7 rounded-lg bg-[#f3e0b5] text-[#28333a] border border-[#e5ca8f] text-xs font-extrabold flex items-center justify-center">2</span>
+                                <div>
+                                    <h3 class="text-sm sm:text-base font-bold text-[#28333a]">Nuovo Tracciato da Importare</h3>
+                                    <p class="text-xs text-slate-500">Nuova versione dell'anagrafica da confrontare</p>
+                                </div>
+                            </div>
+                            <span id="compareSlot2Badge" class="hidden text-[11px] font-mono font-bold bg-[#f3e0b5] text-[#28333a] border border-[#e5ca8f] px-2.5 py-0.5 rounded-full">
+                                0 codici
+                            </span>
+                        </div>
+
+                        <div id="compareDropZone2" class="border-2 border-dashed border-[#e5ca8f] hover:border-[#28333a] rounded-xl p-6 text-center cursor-pointer transition-all bg-[#f3e0b5]/25 hover:bg-[#f3e0b5]/45 group">
+                            <input type="file" id="compareFileInput2" accept=".xlsx,.xls" class="hidden">
+                            <div class="mx-auto w-11 h-11 rounded-full bg-[#28333a] shadow-sm flex items-center justify-center text-[#f3e0b5] group-hover:scale-105 transition-transform mb-2.5">
+                                <i data-lucide="file-plus-2" class="w-5 h-5"></i>
+                            </div>
+                            <p class="text-sm font-semibold text-[#28333a]">
+                                Carica Excel <span class="underline decoration-[#e5ca8f] decoration-2">Nuovo Tracciato</span> (.xlsx / .xls)
+                            </p>
+                            <p class="text-xs text-slate-500 mt-1">
+                                Trascina qui il file oppure clicca per selezionarlo
+                            </p>
+                        </div>
+
+                        <!-- Info File 2 Caricato -->
+                        <div id="compareFile2Info" class="hidden mt-3.5 p-3 rounded-xl bg-[#f3e0b5]/50 border border-[#e5ca8f] flex items-center justify-between gap-2">
+                            <div class="flex items-center gap-2.5 min-w-0">
+                                <div class="w-8 h-8 rounded-lg bg-[#28333a] text-[#f3e0b5] flex items-center justify-center shrink-0">
+                                    <i data-lucide="file-check" class="w-4 h-4"></i>
+                                </div>
+                                <div class="min-w-0">
+                                    <p id="compareFile2Name" class="text-xs sm:text-sm font-bold text-[#28333a] truncate">nuovo_tracciato.xlsx</p>
+                                    <p id="compareFile2Meta" class="text-[11px] text-slate-600">0 righe caricate</p>
+                                </div>
+                            </div>
+                            <span class="text-[10px] font-bold uppercase tracking-wider text-[#28333a] bg-white border border-[#e5ca8f] px-2 py-0.5 rounded">Nuovo File</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Messaggio Attesa Caricamento Secondo File -->
+            <div id="compareWaitingBanner" class="bg-white rounded-2xl border border-[#d8dde6] p-6 text-center">
+                <p id="compareWaitingText" class="text-sm text-slate-600">
+                    Carica entrambi i file Excel negli slot qui sopra (oppure clicca su <strong class="text-[#28333a] bg-[#f3e0b5] px-1.5 py-0.5 rounded">"Carica Esempio Confronto (Demo)"</strong>) per avviare automaticamente il confronto sulla colonna <strong>Codice</strong>.
+                </p>
+            </div>
+
+            <!-- Dashboard Risultati Confronto -->
+            <div id="compareResultsSection" class="hidden space-y-6">
+
+                <!-- 4 Card KPI Riepilogative -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <!-- KPI 1: Totale Righe Differenti -->
+                    <div class="bg-[#28333a] rounded-2xl border border-[#1d252a] shadow-sm p-5 flex items-center justify-between text-white">
+                        <div>
+                            <p class="text-xs font-bold uppercase tracking-wider text-slate-300">Totale Righe Differenti</p>
+                            <p id="kpiTotalDiff" class="text-3xl font-extrabold text-[#f3e0b5] mt-1">0</p>
+                            <p class="text-[11px] text-slate-300 mt-1">Somma aggiunte + in meno</p>
+                        </div>
+                        <div class="w-12 h-12 rounded-2xl bg-[#f3e0b5]/15 text-[#f3e0b5] border border-[#f3e0b5]/30 flex items-center justify-center">
+                            <i data-lucide="git-diff" class="w-6 h-6"></i>
+                        </div>
+                    </div>
+
+                    <!-- KPI 2: Nuove Righe (Aggiunte - Verde) -->
+                    <div class="bg-[#dcfce7]/70 rounded-2xl border-2 border-[#16a34a]/30 shadow-sm p-5 flex items-center justify-between">
+                        <div>
+                            <p class="text-xs font-bold uppercase tracking-wider text-green-800">Nuove Righe (Aggiunte)</p>
+                            <p id="kpiAddedCount" class="text-3xl font-extrabold text-[#16a34a] mt-1">0</p>
+                            <p class="text-[11px] text-green-700 mt-1">Presenti solo nel Nuovo File</p>
+                        </div>
+                        <div class="w-12 h-12 rounded-2xl bg-[#16a34a] text-white flex items-center justify-center shadow-xs">
+                            <i data-lucide="plus-circle" class="w-6 h-6"></i>
+                        </div>
+                    </div>
+
+                    <!-- KPI 3: Righe in Meno (Rimosse - Rosso) -->
+                    <div class="bg-[#fee2e2]/70 rounded-2xl border-2 border-[#dc2626]/30 shadow-sm p-5 flex items-center justify-between">
+                        <div>
+                            <p class="text-xs font-bold uppercase tracking-wider text-red-800">Righe in Meno (Rimosse)</p>
+                            <p id="kpiRemovedCount" class="text-3xl font-extrabold text-[#dc2626] mt-1">0</p>
+                            <p class="text-[11px] text-red-700 mt-1">Presenti solo su Sistema SI-ACT</p>
+                        </div>
+                        <div class="w-12 h-12 rounded-2xl bg-[#dc2626] text-white flex items-center justify-center shadow-xs">
+                            <i data-lucide="minus-circle" class="w-6 h-6"></i>
+                        </div>
+                    </div>
+
+                    <!-- KPI 4: Volumi & Invariate -->
+                    <div class="bg-white rounded-2xl border border-[#d8dde6] shadow-sm p-5 flex flex-col justify-between">
+                        <div class="flex items-center justify-between text-xs">
+                            <span class="text-slate-500 font-medium">Attuale SI-ACT:</span>
+                            <span id="kpiSysRows" class="font-mono font-bold text-[#28333a]">0 righe</span>
+                        </div>
+                        <div class="flex items-center justify-between text-xs mt-1.5">
+                            <span class="text-slate-500 font-medium">Nuovo Tracciato:</span>
+                            <span id="kpiNewRows" class="font-mono font-bold text-[#28333a]">0 righe</span>
+                        </div>
+                        <div class="flex items-center justify-between text-xs mt-1.5 pt-1.5 border-t border-slate-100">
+                            <span class="text-slate-500 font-medium">Codici invariati:</span>
+                            <span id="kpiUnchangedRows" class="font-mono font-bold text-slate-700">0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Eventuali avvisi su codici duplicati -->
+                <div id="compareDuplicatesAlert" class="hidden bg-amber-50 border border-amber-200 rounded-xl p-3.5 text-xs text-amber-900 flex items-start gap-2.5">
+                    <i data-lucide="alert-triangle" class="w-4 h-4 text-amber-600 shrink-0 mt-0.5"></i>
+                    <div id="compareDuplicatesText"></div>
+                </div>
+
+                <!-- Barra Filtri & Ricerca -->
+                <div class="bg-white rounded-2xl shadow-sm border border-[#d8dde6] p-4 sm:p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                    <!-- Filtri Rapidi -->
+                    <div class="flex flex-wrap items-center gap-2">
+                        <button type="button" id="filterDiffAll" onclick="setCompareFilter('ALL')" class="px-3.5 py-2 rounded-xl text-xs font-bold bg-[#28333a] text-[#f3e0b5] shadow-xs transition-all">
+                            Tutte le differenze (<span id="badgeFilterAll">0</span>)
+                        </button>
+                        <button type="button" id="filterDiffAdded" onclick="setCompareFilter('ADDED')" class="px-3.5 py-2 rounded-xl text-xs font-bold bg-[#dcfce7] text-green-800 border border-green-300 hover:bg-green-200/70 transition-all">
+                            Solo Aggiunte (+<span id="badgeFilterAdded">0</span>)
+                        </button>
+                        <button type="button" id="filterDiffRemoved" onclick="setCompareFilter('REMOVED')" class="px-3.5 py-2 rounded-xl text-xs font-bold bg-[#fee2e2] text-red-800 border border-red-300 hover:bg-red-200/70 transition-all">
+                            Solo In meno (-<span id="badgeFilterRemoved">0</span>)
+                        </button>
+                    </div>
+
+                    <!-- Ricerca -->
+                    <div class="relative">
+                        <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
+                        <input type="text" id="compareSearchInput" placeholder="Cerca codice o descrizione..." class="w-full sm:w-64 pl-9 pr-3 py-2 text-xs sm:text-sm bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#28333a]">
+                    </div>
+                </div>
+
+                <!-- Tabella Dettaglio Differenze -->
+                <div class="bg-white rounded-2xl shadow-sm border border-[#d8dde6] overflow-hidden">
+                    <div class="px-5 py-3.5 border-b border-[#d8dde6] flex items-center justify-between bg-[#f6f8fb]">
+                        <div class="flex items-center gap-2">
+                            <i data-lucide="list-checks" class="w-4 h-4 text-[#28333a]"></i>
+                            <h3 class="text-sm font-bold text-[#28333a]">Dettaglio Righe Differenti (Confronto su Colonna 1 - Codice)</h3>
+                        </div>
+                        <span id="compareTableCountLabel" class="text-xs text-slate-500 font-medium">0 righe visualizzate</span>
+                    </div>
+
+                    <!-- Messaggio 0 Differenze -->
+                    <div id="compareZeroDiffBox" class="hidden p-10 text-center space-y-2">
+                        <div class="mx-auto w-12 h-12 rounded-full bg-green-100 text-[#16a34a] flex items-center justify-center mb-2">
+                            <i data-lucide="check-check" class="w-6 h-6"></i>
+                        </div>
+                        <h4 class="text-base font-bold text-[#28333a]">Nessuna differenza rilevata</h4>
+                        <p class="text-sm text-slate-600 max-w-md mx-auto">
+                            I codici dei due tracciati coincidono perfettamente: non risultano righe in aggiunta né righe in meno.
+                        </p>
+                    </div>
+
+                    <!-- Tabella -->
+                    <div id="compareTableWrapper" class="overflow-x-auto max-h-[520px]">
+                        <table class="w-full text-left border-collapse">
+                            <thead class="bg-slate-100 sticky top-0 z-10 border-b border-slate-200">
+                                <tr class="text-[11px] font-bold text-slate-600 uppercase tracking-wider">
+                                    <th class="py-3 px-4 whitespace-nowrap">Stato</th>
+                                    <th class="py-3 px-4 whitespace-nowrap">Origine</th>
+                                    <th class="py-3 px-4 whitespace-nowrap">Codice (Col. 1)</th>
+                                    <th class="py-3 px-4 whitespace-nowrap">Descrizione</th>
+                                    <th class="py-3 px-4 whitespace-nowrap">Codice Padre</th>
+                                    <th class="py-3 px-4 whitespace-nowrap">Inizio Validità</th>
+                                    <th class="py-3 px-4 whitespace-nowrap">Fine Validità</th>
+                                </tr>
+                            </thead>
+                            <tbody id="compareTableBody" class="divide-y divide-slate-200/70 text-xs font-mono">
+                                <!-- Popolato dinamicamente -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- CARD FINALE DI ESPORTAZIONE REPORT EXCEL (IN FONDO ALLA PAGINA) -->
+                <div class="bg-gradient-to-r from-[#f3e0b5]/55 via-white to-[#f3e0b5]/55 rounded-2xl border-2 border-[#28333a]/30 shadow-md p-6 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                    <div class="flex items-start sm:items-center gap-3.5">
+                        <div class="w-12 h-12 rounded-2xl bg-[#28333a] text-[#f3e0b5] flex items-center justify-center shrink-0 shadow-sm">
+                            <i data-lucide="file-spreadsheet" class="w-6 h-6"></i>
+                        </div>
+                        <div>
+                            <h3 class="text-base font-extrabold text-[#28333a]">Esportazione Report Confronto Anagrafiche</h3>
+                            <p class="text-xs text-slate-600 mt-0.5">
+                                Genera il file Excel <code class="font-mono bg-[#f3e0b5] px-1 rounded text-[#28333a]">.xlsx</code> completo con i fogli <strong>Dettaglio_Differenze</strong> (Aggiunte / In meno) e <strong>Riepilogo</strong> numerico.
+                            </p>
+                        </div>
+                    </div>
+
+                    <button id="exportCompareXlsxBtn" type="button" class="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-sm font-extrabold text-[#f3e0b5] bg-[#28333a] hover:bg-[#1d252a] shadow-md shadow-slate-900/20 transition-all active:scale-95 whitespace-nowrap">
+                        <i data-lucide="download" class="w-5 h-5"></i>
+                        Esporta dettaglio differenze (.XLSX)
+                    </button>
+                </div>
+
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-white border-t border-[#d8dde6] py-4 mt-12">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-500">
+            <p><strong class="text-[#28333a]">Convertitore per import anagrafiche</strong> • Suite di preparazione e confronto anagrafiche SI-ACT</p>
+            <p>Elaborazione locale client-side • Nessun dato trasmesso in rete</p>
+        </div>
+    </footer>
+
+    <!-- Logica Applicativa Completa -->
+    <script>
+        // Inizializza le icone Lucide
+        lucide.createIcons();
+
+        // =========================================================================
+        // 1. GESTIONE NAVIGAZIONE TRA HOME, CONVERTITORE E CONFRONTO
+        // =========================================================================
+        const viewHome = document.getElementById('viewHome');
+        const viewConverter = document.getElementById('viewConverter');
+        const viewCompare = document.getElementById('viewCompare');
+
+        const navPillHome = document.getElementById('navPillHome');
+        const navPillConverter = document.getElementById('navPillConverter');
+        const navPillCompare = document.getElementById('navPillCompare');
+        const backToHomeBtn = document.getElementById('backToHomeBtn');
+
+        function navigateTo(target) {
+            viewHome.classList.add('hidden');
+            viewConverter.classList.add('hidden');
+            viewCompare.classList.add('hidden');
+
+            const inactivePillClass = 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all text-slate-200 hover:text-white hover:bg-white/10';
+            const activePillClass = 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all bg-[#f3e0b5] text-[#28333a] shadow-xs';
+
+            navPillHome.className = inactivePillClass;
+            navPillConverter.className = inactivePillClass;
+            navPillCompare.className = inactivePillClass;
+
+            if (target === 'converter') {
+                viewConverter.classList.remove('hidden');
+                navPillConverter.className = activePillClass;
+                backToHomeBtn.classList.remove('hidden');
+            } else if (target === 'compare') {
+                viewCompare.classList.remove('hidden');
+                navPillCompare.className = activePillClass;
+                backToHomeBtn.classList.remove('hidden');
+            } else {
+                viewHome.classList.remove('hidden');
+                navPillHome.className = activePillClass;
+                backToHomeBtn.classList.add('hidden');
+            }
+
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        // =========================================================================
+        // 2. SISTEMA NOTIFICHE TOAST E UTILITÀ CONDIVISE
+        // =========================================================================
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            const bgColor = type === 'error' ? 'bg-red-600' : (type === 'warning' ? 'bg-amber-600' : 'bg-[#28333a]');
+            const iconColor = type === 'error' ? 'text-white' : (type === 'warning' ? 'text-white' : 'text-[#f3e0b5]');
+            const iconName = type === 'error' ? 'alert-circle' : (type === 'warning' ? 'alert-triangle' : 'check-circle-2');
+
+            toast.className = `${bgColor} text-white px-4 py-3 rounded-xl shadow-lg flex items-center gap-2.5 text-sm font-medium transform transition-all duration-300 translate-y-2 opacity-0 pointer-events-auto border border-white/15`;
+            toast.innerHTML = `<i data-lucide="${iconName}" class="w-4 h-4 ${iconColor} shrink-0"></i><span>${message}</span>`;
+            container.appendChild(toast);
+            lucide.createIcons({ root: toast });
+
+            requestAnimationFrame(() => {
+                toast.classList.remove('translate-y-2', 'opacity-0');
+            });
+
+            setTimeout(() => {
+                toast.classList.add('translate-y-2', 'opacity-0');
+                setTimeout(() => toast.remove(), 300);
+            }, 3200);
+        }
+
+        function escapeHtml(str) {
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        function extractCellString(cellObj) {
+            if (!cellObj) return '';
+            if (cellObj.t === 's') {
+                return String(cellObj.v ?? '').trim();
+            }
+            if (cellObj.w !== undefined && cellObj.w !== null) {
+                const w = String(cellObj.w).trim();
+                if (!w.includes('E+') && !w.includes('e+')) {
+                    return w;
+                }
+            }
+            if (cellObj.v !== undefined && cellObj.v !== null) {
+                if (typeof cellObj.v === 'number') {
+                    return cellObj.v.toLocaleString('fullwide', { useGrouping: false });
+                }
+                return String(cellObj.v).trim();
+            }
+            return '';
+        }
+
+        function normalizeDateValue(rawVal, cellObj) {
+            if (rawVal === null || rawVal === undefined) return '';
+            let str = String(rawVal).trim();
+            if (str === '') return '';
+
+            const isoMatch = str.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+            if (isoMatch) {
+                return `${isoMatch[1]}-${isoMatch[2].padStart(2, '0')}-${isoMatch[3].padStart(2, '0')}`;
+            }
+
+            const itMatch = str.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);
+            if (itMatch) {
+                return `${itMatch[3]}-${itMatch[2].padStart(2, '0')}-${itMatch[1].padStart(2, '0')}`;
+            }
+
+            const numericVal = (cellObj && typeof cellObj.v === 'number') ? cellObj.v : (!isNaN(Number(str)) && str !== '' ? Number(str) : null);
+            if (numericVal !== null && numericVal > 1 && numericVal < 2958466) {
+                const parsed = XLSX.SSF.parse_date_code(numericVal);
+                if (parsed && parsed.y && parsed.m && parsed.d) {
+                    const y = String(parsed.y).padStart(4, '0');
+                    const m = String(parsed.m).padStart(2, '0');
+                    const d = String(parsed.d).padStart(2, '0');
+                    return `${y}-${m}-${d}`;
+                }
+            }
+
+            if (cellObj && cellObj.w) {
+                const wStr = String(cellObj.w).trim();
+                const usMatch = wStr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+                if (usMatch) {
+                    const m = usMatch[1].padStart(2, '0');
+                    const d = usMatch[2].padStart(2, '0');
+                    let y = usMatch[3];
+                    if (y.length === 2) {
+                        y = (parseInt(y, 10) >= 50 ? '19' : '20') + y;
+                    }
+                    return `${y}-${m}-${d}`;
+                }
+            }
+
+            return str;
+        }
+
+        function isValidIsoDate(dateStr) {
+            if (!dateStr) return false;
+            const match = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+            if (!match) return false;
+            const year = parseInt(match[1], 10);
+            const month = parseInt(match[2], 10);
+            const day = parseInt(match[3], 10);
+            if (month < 1 || month > 12 || day < 1 || day > 31) return false;
+            const daysInMonth = [31, (year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0)) ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+            return day <= daysInMonth[month - 1];
+        }
+
+        function getTodayIso() {
+            const today = new Date();
+            const yyyy = today.getFullYear();
+            const mm = String(today.getMonth() + 1).padStart(2, '0');
+            const dd = String(today.getDate()).padStart(2, '0');
+            return `${yyyy}-${mm}-${dd}`;
+        }
+
+        // =========================================================================
+        // 3. MODULO 1: CONVERTITORE XLSX -> CSV + PULIZIA DESC + PIPELINE CODICI
+        // =========================================================================
+        const STANDARD_HEADERS = [
+            "CODICE",
+            "DESCRIZIONE",
+            "CODICE PADRE",
+            "INIZIO_VALIDITA'(AAAA-MM-GG)",
+            "FINE_VALIDITA'(AAAA-MM-GG)"
+        ];
+
+        let currentWorkbook = null;
+        let currentFileName = "";
+        let generatedCsvString = "";
+
+        // Pipeline regole massive sulla colonna CODICE (Colonna 1)
+        // Oggetto regola: { id, type, param, label }
+        let codeTransformRules = [];
+
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const loadDemoBtn = document.getElementById('loadDemoBtn');
+        const downloadSampleBtn = document.getElementById('downloadSampleBtn');
+        const fileInfoBar = document.getElementById('fileInfoBar');
+        const loadedFileName = document.getElementById('loadedFileName');
+        const loadedFileMeta = document.getElementById('loadedFileMeta');
+        const sheetSelector = document.getElementById('sheetSelector');
+
+        const optForceHeader = document.getElementById('optForceHeader');
+        const optRemoveEmpty = document.getElementById('optRemoveEmpty');
+
+        const dateModeSelect = document.getElementById('dateModeSelect');
+        const dateModeHelperText = document.getElementById('dateModeHelperText');
+        const customDatesPanel = document.getElementById('customDatesPanel');
+        const customStartDate = document.getElementById('customStartDate');
+        const customEndDate = document.getElementById('customEndDate');
+        const excelDatesNotice = document.getElementById('excelDatesNotice');
+        const previewSuggestedNameBadge = document.getElementById('previewSuggestedNameBadge');
+
+        const btnStartDefault = document.getElementById('btnStartDefault');
+        const btnStartToday = document.getElementById('btnStartToday');
+        const btnEndUnlimited = document.getElementById('btnEndUnlimited');
+        const btnEndToday = document.getElementById('btnEndToday');
+
+        // Controlli Trasformazioni Massive Codice
+        const codeRuleTypeSelect = document.getElementById('codeRuleTypeSelect');
+        const codeRuleActionRow = document.getElementById('codeRuleActionRow');
+        const codeRuleParamWrapper = document.getElementById('codeRuleParamWrapper');
+        const codeRuleBtnWrapper = document.getElementById('codeRuleBtnWrapper');
+        const codeRuleParamLabel = document.getElementById('codeRuleParamLabel');
+        const codeRuleParamInput = document.getElementById('codeRuleParamInput');
+        const codeSimBefore = document.getElementById('codeSimBefore');
+        const codeSimAfter = document.getElementById('codeSimAfter');
+        const addCodeRuleBtn = document.getElementById('addCodeRuleBtn');
+        const activeCodeRulesContainer = document.getElementById('activeCodeRulesContainer');
+        const activeCodeRulesList = document.getElementById('activeCodeRulesList');
+        const codeRulesCountBadge = document.getElementById('codeRulesCountBadge');
+        const clearAllCodeRulesBtn = document.getElementById('clearAllCodeRulesBtn');
+        const codeStatusFooterText = document.getElementById('codeStatusFooterText');
+        const warningsListBox = document.getElementById('warningsListBox');
+        const warningsList = document.getElementById('warningsList');
+
+        const dateHighlightLegend = document.getElementById('dateHighlightLegend');
+        const previewTableHead = document.getElementById('previewTableHead');
+        const previewTableBody = document.getElementById('previewTableBody');
+        const tablePreviewBadge = document.getElementById('tablePreviewBadge');
+        const rawCsvLinesBody = document.getElementById('rawCsvLinesBody');
+
+        const outputFileName = document.getElementById('outputFileName');
+        const copyCsvBtn = document.getElementById('copyCsvBtn');
+        const downloadCsvBtn = document.getElementById('downloadCsvBtn');
+
+        /**
+         * Sanifica il campo DESCRIZIONE (Colonna 2) rimuovendo virgole, doppi apici,
+         * apostrofi/apici singoli e normalizzando spazi multipli e a capo.
+         */
+        function sanitizeDescriptionField(rawDesc) {
+            if (!rawDesc) return '';
+            return String(rawDesc)
+                .replace(/[\r\n\t]+/g, ' ')         // Sostituisce eventuali a capo o tab con spazio
+                .replace(/[,"\'\u2018\u2019\u201C\u201D`´]/g, ' ') // Rimuove virgole, doppi apici, apostrofi e backtick
+                .replace(/\s{2,}/g, ' ')             // Collassa spazi multipli in un singolo spazio
+                .trim();
+        }
+
+        /**
+         * Applica una singola regola di trasformazione a una stringa codice
+         */
+        function applySingleCodeRule(codeStr, rule) {
+            let s = String(codeStr ?? '');
+            if (!s) return '';
+
+            switch (rule.type) {
+                case 'insert_dot': {
+                    const pos = parseInt(rule.param, 10);
+                    if (!isNaN(pos) && pos > 0 && pos < s.length) {
+                        return s.slice(0, pos) + '.' + s.slice(pos);
+                    }
+                    return s;
+                }
+                case 'remove_all_dots': {
+                    return s.replace(/\./g, '');
+                }
+                case 'remove_char': {
+                    const targetChar = String(rule.param ?? '');
+                    if (!targetChar) return s;
+                    return s.split(targetChar).join('');
+                }
+                case 'remove_start_n': {
+                    const n = parseInt(rule.param, 10);
+                    if (!isNaN(n) && n > 0) {
+                        return n >= s.length ? '' : s.slice(n);
+                    }
+                    return s;
+                }
+                case 'remove_end_n': {
+                    const n = parseInt(rule.param, 10);
+                    if (!isNaN(n) && n > 0) {
+                        return n >= s.length ? '' : s.slice(0, s.length - n);
+                    }
+                    return s;
+                }
+                default:
+                    return s;
+            }
+        }
+
+        /**
+         * Applica l'intera pipeline di regole al codice
+         */
+        function applyCodePipeline(rawCode) {
+            let current = String(rawCode ?? '');
+            for (const rule of codeTransformRules) {
+                current = applySingleCodeRule(current, rule);
+            }
+            return current;
+        }
+
+        /**
+         * Aggiorna il campo parametro e la simulazione live quando cambia l'operazione scelta
+         */
+        function updateCodeRuleBuilderUI() {
+            const type = codeRuleTypeSelect.value;
+
+            if (type === 'none') {
+                codeRuleActionRow.classList.add('hidden');
+                updateCodeLiveSimulation();
+                return;
+            }
+
+            codeRuleActionRow.classList.remove('hidden');
+
+            if (type === 'insert_dot') {
+                codeRuleParamWrapper.classList.remove('hidden');
+                codeRuleBtnWrapper.className = 'sm:col-span-5';
+                codeRuleParamLabel.textContent = 'Dopo quanti caratteri (Pos. X):';
+                codeRuleParamInput.type = 'number';
+                codeRuleParamInput.min = '1';
+                codeRuleParamInput.max = '50';
+                if (!codeRuleParamInput.value || isNaN(Number(codeRuleParamInput.value))) {
+                    codeRuleParamInput.value = '6';
+                }
+                codeRuleParamInput.placeholder = 'Es. 6';
+            } else if (type === 'remove_all_dots') {
+                codeRuleParamWrapper.classList.add('hidden');
+                codeRuleBtnWrapper.className = 'sm:col-span-12';
+            } else if (type === 'remove_char') {
+                codeRuleParamWrapper.classList.remove('hidden');
+                codeRuleBtnWrapper.className = 'sm:col-span-5';
+                codeRuleParamLabel.textContent = 'Carattere/testo da rimuovere:';
+                codeRuleParamInput.type = 'text';
+                codeRuleParamInput.removeAttribute('min');
+                codeRuleParamInput.removeAttribute('max');
+                if (!codeRuleParamInput.value || !isNaN(Number(codeRuleParamInput.value))) {
+                    codeRuleParamInput.value = '-';
+                }
+                codeRuleParamInput.placeholder = 'Es. - oppure /';
+            } else if (type === 'remove_start_n') {
+                codeRuleParamWrapper.classList.remove('hidden');
+                codeRuleBtnWrapper.className = 'sm:col-span-5';
+                codeRuleParamLabel.textContent = 'N caratteri da rimuovere all\'inizio:';
+                codeRuleParamInput.type = 'number';
+                codeRuleParamInput.min = '1';
+                codeRuleParamInput.max = '50';
+                if (!codeRuleParamInput.value || isNaN(Number(codeRuleParamInput.value))) {
+                    codeRuleParamInput.value = '2';
+                }
+                codeRuleParamInput.placeholder = 'Es. 2';
+            } else if (type === 'remove_end_n') {
+                codeRuleParamWrapper.classList.remove('hidden');
+                codeRuleBtnWrapper.className = 'sm:col-span-5';
+                codeRuleParamLabel.textContent = 'N caratteri da rimuovere alla fine:';
+                codeRuleParamInput.type = 'number';
+                codeRuleParamInput.min = '1';
+                codeRuleParamInput.max = '50';
+                if (!codeRuleParamInput.value || isNaN(Number(codeRuleParamInput.value))) {
+                    codeRuleParamInput.value = '2';
+                }
+                codeRuleParamInput.placeholder = 'Es. 2';
+            }
+
+            updateCodeLiveSimulation();
+        }
+
+        function updateCodeLiveSimulation() {
+            const type = codeRuleTypeSelect.value;
+            const param = codeRuleParamInput.value;
+
+            let sampleBase = '19092201';
+            if (type === 'remove_all_dots') sampleBase = '190.922.01';
+            if (type === 'remove_char') sampleBase = `190${param || '-'}92201`;
+
+            // Se ci sono già dati caricati, usa il primo codice reale
+            if (currentWorkbook && sheetSelector.value) {
+                const ws = currentWorkbook.Sheets[sheetSelector.value];
+                if (ws && ws['!ref']) {
+                    const rng = XLSX.utils.decode_range(ws['!ref']);
+                    if (rng.e.r >= 1) {
+                        const firstCodeCell = ws[XLSX.utils.encode_cell({ r: 1, c: 0 })];
+                        const realFirstCode = extractCellString(firstCodeCell);
+                        if (realFirstCode) {
+                            sampleBase = applyCodePipeline(realFirstCode);
+                        }
+                    }
+                }
+            }
+
+            if (type === 'none') {
+                codeSimBefore.textContent = sampleBase || '(vuoto)';
+                codeSimAfter.textContent = `${sampleBase || '(vuoto)'} (invariato)`;
+                codeSimAfter.className = 'font-bold text-[#28333a]';
+                return;
+            }
+
+            const simulatedResult = applySingleCodeRule(sampleBase, { type, param });
+            codeSimBefore.textContent = sampleBase || '(vuoto)';
+            codeSimAfter.textContent = simulatedResult || '(vuoto)';
+            codeSimAfter.className = 'font-bold text-[#28333a] bg-[#f3e0b5] px-1.5 py-0.5 rounded';
+        }
+
+        codeRuleTypeSelect.addEventListener('change', updateCodeRuleBuilderUI);
+        codeRuleParamInput.addEventListener('input', updateCodeLiveSimulation);
+
+        addCodeRuleBtn.addEventListener('click', () => {
+            const type = codeRuleTypeSelect.value;
+            if (type === 'none') return;
+
+            const rawParam = codeRuleParamInput.value;
+            let label = '';
+
+            if (type === 'insert_dot') {
+                const pos = parseInt(rawParam, 10);
+                if (isNaN(pos) || pos < 1) {
+                    showToast('Inserisci una posizione valida (numero maggiore di 0).', 'warning');
+                    return;
+                }
+                label = `Aggiungi punto (.) dopo pos. ${pos}`;
+            } else if (type === 'remove_all_dots') {
+                label = `Rimuovi tutti i punti (.)`;
+            } else if (type === 'remove_char') {
+                if (!rawParam) {
+                    showToast('Inserisci il carattere da rimuovere dal codice.', 'warning');
+                    return;
+                }
+                const displayChar = rawParam === ' ' ? '[SPAZIO]' : `"${rawParam}"`;
+                label = `Rimuovi carattere ${displayChar}`;
+            } else if (type === 'remove_start_n') {
+                const n = parseInt(rawParam, 10);
+                if (isNaN(n) || n < 1) {
+                    showToast('Inserisci un numero valido di caratteri da rimuovere all\'inizio.', 'warning');
+                    return;
+                }
+                label = `Rimuovi primi ${n} caratteri`;
+            } else if (type === 'remove_end_n') {
+                const n = parseInt(rawParam, 10);
+                if (isNaN(n) || n < 1) {
+                    showToast('Inserisci un numero valido di caratteri da rimuovere alla fine.', 'warning');
+                    return;
+                }
+                label = `Rimuovi ultimi ${n} caratteri`;
+            }
+
+            codeTransformRules.push({
+                id: Date.now() + Math.random(),
+                type,
+                param: rawParam,
+                label
+            });
+
+            renderActiveCodeRules();
+            updateCodeLiveSimulation();
+            if (currentWorkbook) processSelectedSheet();
+            showToast(`Regola aggiunta: ${label}`);
+        });
+
+        function removeCodeRule(ruleId) {
+            codeTransformRules = codeTransformRules.filter(r => r.id !== ruleId);
+            renderActiveCodeRules();
+            updateCodeLiveSimulation();
+            if (currentWorkbook) processSelectedSheet();
+        }
+
+        function clearAllCodeRules() {
+            codeTransformRules = [];
+            renderActiveCodeRules();
+            updateCodeLiveSimulation();
+            if (currentWorkbook) processSelectedSheet();
+            showToast('Tutte le regole sul codice sono state azzerate.');
+        }
+
+        function renderActiveCodeRules() {
+            const count = codeTransformRules.length;
+            codeRulesCountBadge.textContent = count === 1 ? '1 regola attiva' : `${count} regole attive`;
+
+            if (count === 0) {
+                codeRulesCountBadge.className = 'text-xs font-bold px-2.5 py-1 rounded-full bg-slate-100 text-[#28333a] border border-[#d8dde6]';
+                activeCodeRulesContainer.classList.add('hidden');
+                clearAllCodeRulesBtn.classList.add('hidden');
+                codeStatusFooterText.textContent = 'Nessuna modifica attiva';
+                codeStatusFooterText.className = 'font-semibold text-[#28333a]';
+                return;
+            }
+
+            codeRulesCountBadge.className = 'text-xs font-bold px-2.5 py-1 rounded-full bg-[#f3e0b5] text-[#28333a] border border-[#e5ca8f]';
+            activeCodeRulesContainer.classList.remove('hidden');
+            clearAllCodeRulesBtn.classList.remove('hidden');
+            codeStatusFooterText.textContent = count === 1 ? '1 regola applicata ai codici' : `${count} regole applicate in sequenza`;
+            codeStatusFooterText.className = 'font-bold text-[#28333a]';
+
+            activeCodeRulesList.innerHTML = codeTransformRules.map((rule, idx) => `
+                <div class="inline-flex items-center gap-2 bg-[#f3e0b5]/70 border border-[#e5ca8f] text-[#28333a] px-3 py-1.5 rounded-xl text-xs font-semibold shadow-2xs">
+                    <span class="w-4 h-4 rounded-full bg-[#28333a] text-[#f3e0b5] text-[10px] font-bold flex items-center justify-center">${idx + 1}</span>
+                    <span>${escapeHtml(rule.label)}</span>
+                    <button type="button" onclick="removeCodeRule(${rule.id})" class="text-[#28333a] hover:text-red-600 ml-1 p-0.5 rounded transition-colors" title="Rimuovi questa regola">
+                        <i data-lucide="x" class="w-3.5 h-3.5"></i>
+                    </button>
+                </div>
+            `).join('');
+
+            lucide.createIcons({ root: activeCodeRulesList });
+        }
+
+        /**
+         * Aggiorna UI e stato input date in base al menù a tendina
+         */
+        function updateDateSelectUI() {
+            const mode = dateModeSelect.value;
+            const isReadExcel = mode === 'read_excel';
+
+            customStartDate.disabled = isReadExcel;
+            customEndDate.disabled = isReadExcel;
+            [btnStartDefault, btnStartToday, btnEndUnlimited, btnEndToday].forEach(btn => {
+                btn.disabled = isReadExcel;
+                if (isReadExcel) {
+                    btn.classList.add('opacity-40', 'pointer-events-none');
+                } else {
+                    btn.classList.remove('opacity-40', 'pointer-events-none');
+                }
+            });
+
+            if (isReadExcel) {
+                customDatesPanel.classList.add('opacity-65');
+                excelDatesNotice.classList.remove('hidden');
+                dateModeHelperText.textContent = "Verranno lette e convertite le date già presenti nelle colonne 4 e 5 del file Excel.";
+            } else if (mode === 'overwrite_empty') {
+                customDatesPanel.classList.remove('opacity-65');
+                excelDatesNotice.classList.add('hidden');
+                dateModeHelperText.textContent = "Mantiene le date già presenti nell'Excel e compila solo le celle vuote con i valori inseriti sotto.";
+            } else {
+                customDatesPanel.classList.remove('opacity-65');
+                excelDatesNotice.classList.add('hidden');
+                dateModeHelperText.textContent = "Tutte le righe del CSV riceveranno esattamente le date impostate nei due campi a fianco.";
+            }
+
+            if (isValidIsoDate(customStartDate.value) && isValidIsoDate(customEndDate.value)) {
+                const sD = customStartDate.value.split('-').reverse().join('_');
+                const eD = customEndDate.value.split('-').reverse().join('_');
+                previewSuggestedNameBadge.textContent = `HSP11BIS_${sD}_${eD}.csv`;
+            }
+        }
+
+        dateModeSelect.addEventListener('change', () => {
+            updateDateSelectUI();
+            if (currentWorkbook) processSelectedSheet();
+        });
+
+        [customStartDate, customEndDate].forEach(inp => {
+            inp.addEventListener('change', () => {
+                updateDateSelectUI();
+                if (currentWorkbook) processSelectedSheet();
+            });
+        });
+
+        btnStartDefault.addEventListener('click', () => {
+            customStartDate.value = '2007-07-31';
+            customStartDate.dispatchEvent(new Event('change'));
+        });
+
+        btnStartToday.addEventListener('click', () => {
+            customStartDate.value = getTodayIso();
+            customStartDate.dispatchEvent(new Event('change'));
+        });
+
+        btnEndUnlimited.addEventListener('click', () => {
+            customEndDate.value = '3000-12-31';
+            customEndDate.dispatchEvent(new Event('change'));
+        });
+
+        btnEndToday.addEventListener('click', () => {
+            customEndDate.value = getTodayIso();
+            customEndDate.dispatchEvent(new Event('change'));
+        });
+
+        // Toggle Vista Tabellare / Codice Raw CSV
+        function switchConverterPreview(tab) {
+            const tablePanel = document.getElementById('converterTablePanel');
+            const rawPanel = document.getElementById('converterRawPanel');
+            const btnTable = document.getElementById('toggleTableBtn');
+            const btnRaw = document.getElementById('toggleRawBtn');
+
+            if (tab === 'raw') {
+                tablePanel.classList.add('hidden');
+                rawPanel.classList.remove('hidden');
+                btnRaw.className = 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-[#28333a] text-[#f3e0b5] shadow-xs transition-all';
+                btnTable.className = 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-slate-600 hover:text-[#28333a] transition-all';
+            } else {
+                rawPanel.classList.add('hidden');
+                tablePanel.classList.remove('hidden');
+                btnTable.className = 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-[#28333a] text-[#f3e0b5] shadow-xs transition-all';
+                btnRaw.className = 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-slate-600 hover:text-[#28333a] transition-all';
+            }
+        }
+
+        // Eventi Dropzone Convertitore
+        dropZone.addEventListener('click', () => fileInput.click());
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('drop-zone-active');
+        });
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drop-zone-active'));
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('drop-zone-active');
+            if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                handleConverterFileUpload(e.dataTransfer.files[0]);
+            }
+        });
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files && e.target.files.length > 0) {
+                handleConverterFileUpload(e.target.files[0]);
+            }
+        });
+
+        [sheetSelector, optForceHeader, optRemoveEmpty].forEach(el => {
+            el.addEventListener('change', () => {
+                if (currentWorkbook) {
+                    updateCodeLiveSimulation();
+                    processSelectedSheet();
+                }
+            });
+        });
+
+        function buildConverterSampleWorkbook() {
+            const sampleData = [
+                ["CODICE", "DESCRIZIONE", "CODICE PADRE", "INIZIO_VALIDITA'(AAAA-MM-GG)", "FINE_VALIDITA'(AAAA-MM-GG)"],
+                ["19092201", "OSPEDALE GARIBALDI, CENTRO", "190922", "2007-07-31", "3000-12-31"],
+                ["19092204", "OSPEDALE GARIBALDI \"NESIMA\"", "190922", "2010-05-12", "3000-12-31"],
+                ["19092301", "PRESIDIO OSPEDALIERO 'CANNIZZARO'", "190923", "31/07/2007", "31/12/3000"],
+                ["19092601", "P.O. SAN MARCO, LIBRINO - CATANIA", "190926", "", ""],
+                ["19092701", "P.O. G. RODOLICO - POLICLINICO", "190926", "2015-01-01", "3000-12-31"],
+                ["19096001", "OSPEDALE S. MARTA E S. VENERA, ACIREALE", "190960", "2007-07-31", "3000-12-31"]
+            ];
+            const ws = XLSX.utils.aoa_to_sheet(sampleData);
+            ws['!cols'] = [{ wch: 14 }, { wch: 44 }, { wch: 16 }, { wch: 28 }, { wch: 28 }];
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Anagrafica_SIACT");
+            return wb;
+        }
+
+        loadDemoBtn.addEventListener('click', () => {
+            const wb = buildConverterSampleWorkbook();
+            loadWorkbookIntoConverter(wb, 'Anagrafiche_Demo_SIACT.xlsx', 15360);
+            showToast('Dati demo caricati! Le descrizioni con virgole e apici sono state ripulite.');
+        });
+
+        downloadSampleBtn.addEventListener('click', () => {
+            const wb = buildConverterSampleWorkbook();
+            XLSX.writeFile(wb, "Modello_Esempio_Anagrafiche.xlsx");
+            showToast('File Excel di esempio scaricato!');
+        });
+
+        function loadWorkbookIntoConverter(workbook, fileName, byteSize) {
+            currentWorkbook = workbook;
+            currentFileName = fileName;
+
+            const sizeKB = (byteSize / 1024).toFixed(1);
+            loadedFileName.textContent = fileName;
+            loadedFileMeta.textContent = `${sizeKB} KB • ${currentWorkbook.SheetNames.length} ${currentWorkbook.SheetNames.length === 1 ? 'foglio' : 'fogli'}`;
+            fileInfoBar.classList.remove('hidden');
+
+            sheetSelector.innerHTML = '';
+            currentWorkbook.SheetNames.forEach((name, idx) => {
+                const option = document.createElement('option');
+                option.value = name;
+                option.textContent = `${idx + 1}. ${name}`;
+                sheetSelector.appendChild(option);
+            });
+
+            updateCodeLiveSimulation();
+            processSelectedSheet();
+        }
+
+        function handleConverterFileUpload(file) {
+            const validExtensions = ['.xlsx', '.xls'];
+            if (!validExtensions.some(ext => file.name.toLowerCase().endsWith(ext))) {
+                showToast('Formato non supportato. Carica un file .xlsx o .xls.', 'error');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const wb = XLSX.read(data, { type: 'array', cellDates: false, cellText: true, cellNF: true });
+                    loadWorkbookIntoConverter(wb, file.name, file.size);
+                    showToast(`File "${file.name}" caricato e convertito!`);
+                } catch (err) {
+                    console.error(err);
+                    showToast('Errore durante la lettura del file Excel.', 'error');
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function quoteCsvField(value) {
+            const str = value === null || value === undefined ? '' : String(value);
+            return `"${str.replace(/"/g, '""')}"`;
+        }
+
+        function processSelectedSheet() {
+            const sheetName = sheetSelector.value;
+            const worksheet = currentWorkbook.Sheets[sheetName];
+            if (!worksheet) return;
+
+            const forceHeader = optForceHeader.checked;
+            const removeEmpty = optRemoveEmpty.checked;
+            const dateMode = dateModeSelect.value;
+            const userStartDate = customStartDate.value.trim();
+            const userEndDate = customEndDate.value.trim();
+
+            const ref = worksheet['!ref'];
+            if (!ref) {
+                showToast('Il foglio selezionato è vuoto.', 'warning');
+                return;
+            }
+
+            const range = XLSX.utils.decode_range(ref);
+            const rawRows = [];
+            let maxDetectedCols = 0;
+
+            for (let R = range.s.r; R <= range.e.r; ++R) {
+                const rowCells = [];
+                let rowHasContent = false;
+                const endCol = Math.max(range.e.c, 4);
+
+                for (let C = 0; C <= endCol; ++C) {
+                    const cellAddress = XLSX.utils.encode_cell({ r: R, c: C });
+                    const cellObj = worksheet[cellAddress];
+                    const val = extractCellString(cellObj);
+                    if (val !== '') {
+                        rowHasContent = true;
+                        if (C + 1 > maxDetectedCols) maxDetectedCols = C + 1;
+                    }
+                    rowCells.push({ val, cellObj });
+                }
+
+                if (removeEmpty && !rowHasContent) continue;
+                rawRows.push(rowCells);
+            }
+
+            if (rawRows.length === 0) {
+                showToast('Nessuna riga valida trovata nel foglio.', 'warning');
+                return;
+            }
+
+            const warnings = [];
+            if (maxDetectedCols > 5) {
+                warnings.push(`Rilevate ${maxDetectedCols} colonne nel file Excel: verranno esportate solo le prime 5 colonne come da tracciato.`);
+            }
+
+            const firstRowStrings = rawRows[0].slice(0, 5).map(c => c.val);
+
+            const headerRow = forceHeader
+                ? [...STANDARD_HEADERS]
+                : [
+                    firstRowStrings[0] || '',
+                    sanitizeDescriptionField(firstRowStrings[1] || ''),
+                    firstRowStrings[2] || '',
+                    firstRowStrings[3] || '',
+                    firstRowStrings[4] || ''
+                ];
+
+            const processedDataRows = [];
+            const collectedStartDates = [];
+            const collectedEndDates = [];
+            let anyHighlightApplied = false;
+            let sanitizedDescCount = 0;
+            let transformedCodeCount = 0;
+
+            for (let i = 1; i < rawRows.length; i++) {
+                const r = rawRows[i];
+                const excelRowNum = i + 1;
+
+                const rawCol0 = r[0] ? r[0].val : '';
+                const rawCol1 = r[1] ? r[1].val : '';
+
+                // Colonna 1: CODICE + Trasformazioni Massive
+                const finalCol0 = applyCodePipeline(rawCol0);
+                const col0Modified = rawCol0 !== finalCol0;
+                if (col0Modified) {
+                    transformedCodeCount++;
+                    anyHighlightApplied = true;
+                }
+
+                // Colonna 2: DESCRIZIONE + Pulizia automatica virgole/apici
+                const finalCol1 = sanitizeDescriptionField(rawCol1);
+                const col1Sanitized = rawCol1.trim() !== finalCol1;
+                if (col1Sanitized) {
+                    sanitizedDescCount++;
+                    anyHighlightApplied = true;
+                }
+
+                // Colonna 3: CODICE PADRE
+                const col2 = r[2] ? r[2].val : '';
+
+                // Colonne 4 e 5: DATE
+                const excelCol3 = r[3] ? normalizeDateValue(r[3].val, r[3]?.cellObj) : '';
+                const excelCol4 = r[4] ? normalizeDateValue(r[4].val, r[4]?.cellObj) : '';
+
+                let finalCol3 = excelCol3;
+                let finalCol4 = excelCol4;
+                let col3Overridden = false;
+                let col4Overridden = false;
+
+                if (dateMode === 'overwrite_all') {
+                    finalCol3 = userStartDate;
+                    finalCol4 = userEndDate;
+                    col3Overridden = true;
+                    col4Overridden = true;
+                } else if (dateMode === 'overwrite_empty') {
+                    if (!excelCol3 && userStartDate) {
+                        finalCol3 = userStartDate;
+                        col3Overridden = true;
+                    }
+                    if (!excelCol4 && userEndDate) {
+                        finalCol4 = userEndDate;
+                        col4Overridden = true;
+                    }
+                }
+
+                if (col3Overridden || col4Overridden) {
+                    anyHighlightApplied = true;
+                }
+
+                if (!finalCol0) warnings.push(`Riga ${excelRowNum}: campo "CODICE" vuoto.`);
+                if (!finalCol1) warnings.push(`Riga ${excelRowNum}: campo "DESCRIZIONE" vuoto.`);
+
+                if (!finalCol3) {
+                    warnings.push(`Riga ${excelRowNum}: "INIZIO_VALIDITA'" mancante.`);
+                } else if (!isValidIsoDate(finalCol3)) {
+                    warnings.push(`Riga ${excelRowNum}: "INIZIO_VALIDITA'" ("${finalCol3}") non è nel formato AAAA-MM-GG.`);
+                } else {
+                    collectedStartDates.push(finalCol3);
+                }
+
+                if (!finalCol4) {
+                    warnings.push(`Riga ${excelRowNum}: "FINE_VALIDITA'" mancante.`);
+                } else if (!isValidIsoDate(finalCol4)) {
+                    warnings.push(`Riga ${excelRowNum}: "FINE_VALIDITA'" ("${finalCol4}") non è nel formato AAAA-MM-GG.`);
+                } else {
+                    collectedEndDates.push(finalCol4);
+                }
+
+                processedDataRows.push({
+                    values: [finalCol0, finalCol1, col2, finalCol3, finalCol4],
+                    rawCol0,
+                    rawCol1,
+                    col0Modified,
+                    col1Sanitized,
+                    col3Overridden,
+                    col4Overridden
+                });
+            }
+
+            // Costruzione CSV rigoroso: ogni campo tra doppi apici "...", delimitatore virgola ",", newline \n
+            const csvLines = [];
+            csvLines.push(headerRow.map(quoteCsvField).join(','));
+            processedDataRows.forEach(rowObj => {
+                csvLines.push(rowObj.values.map(quoteCsvField).join(','));
+            });
+            generatedCsvString = csvLines.join('\n');
+
+            // Aggiorna nome file dinamico
+            let startStr = '';
+            let endStr = '';
+            if (dateMode === 'overwrite_all' && isValidIsoDate(userStartDate) && isValidIsoDate(userEndDate)) {
+                startStr = userStartDate;
+                endStr = userEndDate;
+            } else if (collectedStartDates.length > 0 && collectedEndDates.length > 0) {
+                startStr = [...collectedStartDates].sort()[0];
+                endStr = [...collectedEndDates].sort().slice(-1)[0];
+            }
+
+            if (startStr && endStr) {
+                const minD = startStr.split('-').reverse().join('_');
+                const maxD = endStr.split('-').reverse().join('_');
+                outputFileName.value = `HSP11BIS_${minD}_${maxD}.csv`;
+            } else {
+                outputFileName.value = `${currentFileName.replace(/\.(xlsx|xls)$/i, '')}.csv`;
+            }
+
+            updateConverterDashboardUI(headerRow, processedDataRows, warnings, anyHighlightApplied, sanitizedDescCount, transformedCodeCount);
+        }
+
+        function updateConverterDashboardUI(headerRow, dataRows, warnings, anyHighlightApplied, sanitizedDescCount, transformedCodeCount) {
+            emptyStateGuide.classList.add('hidden');
+            validationSection.classList.remove('hidden');
+
+            if (anyHighlightApplied) {
+                dateHighlightLegend.classList.remove('hidden');
+            } else {
+                dateHighlightLegend.classList.add('hidden');
+            }
+
+            statTotalRows.textContent = dataRows.length.toLocaleString('it-IT');
+            statSanitizedCount.textContent = `${sanitizedDescCount} desc. • ${transformedCodeCount} cod.`;
+            statWarnCount.textContent = warnings.length;
+
+            if (warnings.length === 0) {
+                statWarnIconBox.className = 'w-10 h-10 rounded-xl bg-slate-100 text-slate-400 flex items-center justify-center';
+                warningsListBox.classList.add('hidden');
+            } else {
+                statWarnIconBox.className = 'w-10 h-10 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center';
+                warningsListBox.classList.remove('hidden');
+
+                warningsList.innerHTML = '';
+                warnings.slice(0, 50).forEach(w => {
+                    const li = document.createElement('li');
+                    li.textContent = w;
+                    warningsList.appendChild(li);
+                });
+            }
+
+            previewTableHead.innerHTML = `<th class="py-2.5 px-3 text-slate-400 font-normal w-10">#</th>` +
+                headerRow.map(h => `<th class="py-2.5 px-3 whitespace-nowrap">${escapeHtml(h)}</th>`).join('');
+
+            const previewLimit = 100;
+            const sliceRows = dataRows.slice(0, previewLimit);
+            tablePreviewBadge.textContent = dataRows.length > previewLimit
+                ? `Prime ${previewLimit} di ${dataRows.length} righe`
+                : `Tutte le ${dataRows.length} righe`;
+
+            previewTableBody.innerHTML = sliceRows.map((rowObj, idx) => {
+                const cellsHtml = rowObj.values.map((cell, cIdx) => {
+                    const isEmpty = cell === '';
+                    const isDateCol = cIdx === 3 || cIdx === 4;
+                    const badDate = isDateCol && !isEmpty && !isValidIsoDate(cell);
+
+                    const isModified =
+                        (cIdx === 0 && rowObj.col0Modified) ||
+                        (cIdx === 1 && rowObj.col1Sanitized) ||
+                        (cIdx === 3 && rowObj.col3Overridden) ||
+                        (cIdx === 4 && rowObj.col4Overridden);
+
+                    let cellClass = 'py-2 px-3 whitespace-nowrap align-top ';
+                    if (badDate) {
+                        cellClass += 'bg-amber-50 text-amber-700 font-semibold';
+                    } else if (isEmpty) {
+                        cellClass += 'text-slate-300 italic';
+                    } else if (isModified) {
+                        cellClass += 'bg-[#f3e0b5]/55 text-[#28333a] font-semibold';
+                    } else {
+                        cellClass += 'text-[#28333a]';
+                    }
+
+                    // Se codice trasformato o descrizione sanificata, mostra il valore originale sotto per verifica visiva
+                    if (cIdx === 0 && rowObj.col0Modified) {
+                        return `<td class="${cellClass}">
+                            <div>${isEmpty ? '"" (vuoto)' : escapeHtml(cell)}</div>
+                            <div class="text-[10px] font-normal text-slate-500 line-through">orig: ${escapeHtml(rowObj.rawCol0)}</div>
+                        </td>`;
+                    }
+
+                    if (cIdx === 1 && rowObj.col1Sanitized) {
+                        return `<td class="${cellClass}">
+                            <div>${escapeHtml(cell)}</div>
+                            <div class="text-[10px] font-normal text-slate-600 flex items-center gap-1">
+                                <span>ripulita da:</span>
+                                <span class="line-through">${escapeHtml(rowObj.rawCol1)}</span>
+                            </div>
+                        </td>`;
+                    }
+
+                    return `<td class="${cellClass}">${isEmpty ? '"" (vuoto)' : escapeHtml(cell)}</td>`;
+                }).join('');
+
+                return `<tr class="hover:bg-slate-50/90 transition-colors">
+                    <td class="py-2 px-3 text-slate-400 select-none align-top">${idx + 1}</td>
+                    ${cellsHtml}
+                </tr>`;
+            }).join('');
+
+            // Popola Codice Raw CSV numerato
+            const lines = generatedCsvString.split('\n');
+            const rawPreviewLimit = 300;
+            const visibleLines = lines.slice(0, rawPreviewLimit);
+
+            let rawHtml = visibleLines.map((line, index) => {
+                const isHeaderLine = index === 0;
+                const textColor = isHeaderLine ? 'text-white font-semibold' : 'text-[#f3e0b5]';
+                return `<tr class="hover:bg-white/5">
+                    <td class="py-1 px-3 text-right text-slate-500 select-none border-r border-slate-700/80 w-11 align-top">${index + 1}</td>
+                    <td class="py-1 px-3 ${textColor} whitespace-pre">${escapeHtml(line)}</td>
+                </tr>`;
+            }).join('');
+
+            if (lines.length > rawPreviewLimit) {
+                rawHtml += `<tr>
+                    <td class="py-2 px-3 text-right text-slate-600 select-none border-r border-slate-800/80">...</td>
+                    <td class="py-2 px-3 text-slate-400 italic">[Altre ${lines.length - rawPreviewLimit} righe incluse nel file scaricabile]</td>
+                </tr>`;
+            }
+            rawCsvLinesBody.innerHTML = rawHtml;
+        }
+
+        copyCsvBtn.addEventListener('click', () => {
+            if (!generatedCsvString) return;
+            const tempArea = document.createElement('textarea');
+            tempArea.value = generatedCsvString;
+            tempArea.style.position = 'fixed';
+            tempArea.style.left = '-9999px';
+            document.body.appendChild(tempArea);
+            tempArea.select();
+            try {
+                document.execCommand('copy');
+                showToast('Contenuto CSV copiato negli appunti!');
+            } catch (err) {
+                showToast('Impossibile copiare automaticamente.', 'error');
+            } finally {
+                document.body.removeChild(tempArea);
+            }
+        });
+
+        downloadCsvBtn.addEventListener('click', () => {
+            if (!generatedCsvString) return;
+            let fileName = outputFileName.value.trim() || 'HSP11BIS_31_07_2007_31_12_3000.csv';
+            if (!fileName.toLowerCase().endsWith('.csv')) fileName += '.csv';
+
+            // UTF-8 senza BOM
+            const blob = new Blob([generatedCsvString], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', fileName);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+
+            showToast(`File "${fileName}" esportato con successo!`);
+        });
+
+        // =========================================================================
+        // 4. MODULO 2: CONFRONTO ANAGRAFICHE (DELTA SI-ACT)
+        // =========================================================================
+        let compareDataset1 = null;
+        let compareDataset2 = null;
+        let compareDiffResults = [];
+        let compareStats = { sysCount: 0, newCount: 0, added: 0, removed: 0, unchanged: 0 };
+        let currentCompareFilter = 'ALL';
+
+        const compareDropZone1 = document.getElementById('compareDropZone1');
+        const compareFileInput1 = document.getElementById('compareFileInput1');
+        const compareDropZone2 = document.getElementById('compareDropZone2');
+        const compareFileInput2 = document.getElementById('compareFileInput2');
+        const loadCompareDemoBtn = document.getElementById('loadCompareDemoBtn');
+        const resetCompareBtn = document.getElementById('resetCompareBtn');
+
+        const compareSearchInput = document.getElementById('compareSearchInput');
+        const exportCompareXlsxBtn = document.getElementById('exportCompareXlsxBtn');
+
+        compareDropZone1.addEventListener('click', () => compareFileInput1.click());
+        compareDropZone1.addEventListener('dragover', (e) => { e.preventDefault(); compareDropZone1.classList.add('drop-zone-active'); });
+        compareDropZone1.addEventListener('dragleave', () => compareDropZone1.classList.remove('drop-zone-active'));
+        compareDropZone1.addEventListener('drop', (e) => {
+            e.preventDefault();
+            compareDropZone1.classList.remove('drop-zone-active');
+            if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                handleCompareFileUpload(e.dataTransfer.files[0], 1);
+            }
+        });
+        compareFileInput1.addEventListener('change', (e) => {
+            if (e.target.files && e.target.files.length > 0) handleCompareFileUpload(e.target.files[0], 1);
+        });
+
+        compareDropZone2.addEventListener('click', () => compareFileInput2.click());
+        compareDropZone2.addEventListener('dragover', (e) => { e.preventDefault(); compareDropZone2.classList.add('drop-zone-active'); });
+        compareDropZone2.addEventListener('dragleave', () => compareDropZone2.classList.remove('drop-zone-active'));
+        compareDropZone2.addEventListener('drop', (e) => {
+            e.preventDefault();
+            compareDropZone2.classList.remove('drop-zone-active');
+            if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                handleCompareFileUpload(e.dataTransfer.files[0], 2);
+            }
+        });
+        compareFileInput2.addEventListener('change', (e) => {
+            if (e.target.files && e.target.files.length > 0) handleCompareFileUpload(e.target.files[0], 2);
+        });
+
+        function parseWorkbookForComparison(workbook, fileName) {
+            const firstSheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[firstSheetName];
+            if (!worksheet || !worksheet['!ref']) {
+                return { fileName, rows: [], duplicates: [], maxCols: 5 };
+            }
+
+            const range = XLSX.utils.decode_range(worksheet['!ref']);
+            const maxCols = Math.max(range.e.c + 1, 5);
+            const extractedRows = [];
+
+            for (let R = range.s.r; R <= range.e.r; ++R) {
+                const rowVals = [];
+                let hasAnyContent = false;
+
+                for (let C = 0; C < maxCols; ++C) {
+                    const addr = XLSX.utils.encode_cell({ r: R, c: C });
+                    const cellObj = worksheet[addr];
+                    let val = extractCellString(cellObj);
+                    if ((C === 3 || C === 4) && val !== '') {
+                        val = normalizeDateValue(val, cellObj);
+                    }
+                    if (val !== '') hasAnyContent = true;
+                    rowVals.push(val);
+                }
+
+                if (!hasAnyContent) continue;
+
+                if (extractedRows.length === 0) {
+                    const firstColUpper = rowVals[0].toUpperCase();
+                    if (firstColUpper === 'CODICE' || firstColUpper === 'COD' || firstColUpper.includes('CODICE')) {
+                        continue;
+                    }
+                }
+
+                const code = String(rowVals[0] || '').trim();
+                if (!code) continue;
+
+                extractedRows.push({
+                    code,
+                    cols: rowVals
+                });
+            }
+
+            const seen = new Set();
+            const duplicates = new Set();
+            extractedRows.forEach(r => {
+                if (seen.has(r.code)) duplicates.add(r.code);
+                seen.add(r.code);
+            });
+
+            return {
+                fileName,
+                rows: extractedRows,
+                duplicates: Array.from(duplicates),
+                maxCols
+            };
+        }
+
+        function handleCompareFileUpload(file, slotNumber) {
+            const validExtensions = ['.xlsx', '.xls'];
+            if (!validExtensions.some(ext => file.name.toLowerCase().endsWith(ext))) {
+                showToast('Formato non supportato. Carica un file .xlsx o .xls.', 'error');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const wb = XLSX.read(data, { type: 'array', cellDates: false, cellText: true, cellNF: true });
+                    const parsed = parseWorkbookForComparison(wb, file.name);
+
+                    if (slotNumber === 1) {
+                        compareDataset1 = parsed;
+                        updateCompareSlotUI(1, parsed);
+                    } else {
+                        compareDataset2 = parsed;
+                        updateCompareSlotUI(2, parsed);
+                    }
+
+                    resetCompareBtn.classList.remove('hidden');
+                    runAnagraficheComparison();
+                } catch (err) {
+                    console.error(err);
+                    showToast('Errore durante la lettura del file Excel.', 'error');
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function updateCompareSlotUI(slotNumber, dataset) {
+            if (slotNumber === 1) {
+                document.getElementById('compareFile1Info').classList.remove('hidden');
+                document.getElementById('compareFile1Name').textContent = dataset.fileName;
+                document.getElementById('compareFile1Meta').textContent = `${dataset.rows.length} righe anagrafiche lette`;
+                const badge = document.getElementById('compareSlot1Badge');
+                badge.textContent = `${dataset.rows.length} codici`;
+                badge.classList.remove('hidden');
+            } else {
+                document.getElementById('compareFile2Info').classList.remove('hidden');
+                document.getElementById('compareFile2Name').textContent = dataset.fileName;
+                document.getElementById('compareFile2Meta').textContent = `${dataset.rows.length} righe anagrafiche lette`;
+                const badge = document.getElementById('compareSlot2Badge');
+                badge.textContent = `${dataset.rows.length} codici`;
+                badge.classList.remove('hidden');
+            }
+        }
+
+        loadCompareDemoBtn.addEventListener('click', () => {
+            const sysRowsAoa = [
+                ["CODICE", "DESCRIZIONE", "CODICE PADRE", "INIZIO_VALIDITA'(AAAA-MM-GG)", "FINE_VALIDITA'(AAAA-MM-GG)"],
+                ["190922", "AZIENDA OSPEDALIERA ARNAS GARIBALDI", "", "2007-07-31", "3000-12-31"],
+                ["19092201", "OSPEDALE GARIBALDI - CENTRO", "190922", "2007-07-31", "3000-12-31"],
+                ["19092204", "OSPEDALE GARIBALDI - NESIMA", "190922", "2007-07-31", "3000-12-31"],
+                ["19092301", "PRESIDIO OSPEDALIERO CANNIZZARO", "190923", "2007-07-31", "3000-12-31"],
+                ["19092501", "P.O. VITTORIO EMANUELE (DISMESSO)", "190925", "2007-07-31", "2020-12-31"],
+                ["19092601", "P.O. SAN MARCO - LIBRINO", "190926", "2019-06-01", "3000-12-31"],
+                ["19092701", "P.O. G. RODOLICO - POLICLINICO", "190926", "2007-07-31", "3000-12-31"],
+                ["19096001", "OSPEDALE S. MARTA E S. VENERA - ACIREALE", "190960", "2007-07-31", "3000-12-31"]
+            ];
+
+            const newRowsAoa = [
+                ["CODICE", "DESCRIZIONE", "CODICE PADRE", "INIZIO_VALIDITA'(AAAA-MM-GG)", "FINE_VALIDITA'(AAAA-MM-GG)"],
+                ["190922", "AZIENDA OSPEDALIERA ARNAS GARIBALDI", "", "2007-07-31", "3000-12-31"],
+                ["19092201", "OSPEDALE GARIBALDI - CENTRO", "190922", "2007-07-31", "3000-12-31"],
+                ["19092204", "OSPEDALE GARIBALDI - NESIMA", "190922", "2007-07-31", "3000-12-31"],
+                ["19092301", "PRESIDIO OSPEDALIERO CANNIZZARO", "190923", "2007-07-31", "3000-12-31"],
+                ["19092601", "P.O. SAN MARCO - LIBRINO", "190926", "2019-06-01", "3000-12-31"],
+                ["19092701", "P.O. G. RODOLICO - POLICLINICO", "190926", "2007-07-31", "3000-12-31"],
+                ["19092801", "NUOVO POLO ONCOLOGICO METROPOLITANO", "190923", "2026-01-01", "3000-12-31"],
+                ["19096001", "OSPEDALE S. MARTA E S. VENERA - ACIREALE", "190960", "2007-07-31", "3000-12-31"],
+                ["19096101", "PRESIDIO TERRITORIALE DI ASSISTENZA GIARRE", "190960", "2026-02-01", "3000-12-31"]
+            ];
+
+            const wb1 = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb1, XLSX.utils.aoa_to_sheet(sysRowsAoa), "SIACT_Attuale");
+
+            const wb2 = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb2, XLSX.utils.aoa_to_sheet(newRowsAoa), "Nuovo_Tracciato");
+
+            compareDataset1 = parseWorkbookForComparison(wb1, "SIACT_Sistema_Attuale_Demo.xlsx");
+            compareDataset2 = parseWorkbookForComparison(wb2, "Nuovo_Tracciato_Import_Demo.xlsx");
+
+            updateCompareSlotUI(1, compareDataset1);
+            updateCompareSlotUI(2, compareDataset2);
+            resetCompareBtn.classList.remove('hidden');
+
+            runAnagraficheComparison();
+            showToast('Esempio confronto caricato: individuate 2 aggiunte (verde) e 1 rimozione (rosso).');
+        });
+
+        resetCompareBtn.addEventListener('click', () => {
+            compareDataset1 = null;
+            compareDataset2 = null;
+            compareDiffResults = [];
+            compareFileInput1.value = '';
+            compareFileInput2.value = '';
+
+            document.getElementById('compareFile1Info').classList.add('hidden');
+            document.getElementById('compareFile2Info').classList.add('hidden');
+            document.getElementById('compareSlot1Badge').classList.add('hidden');
+            document.getElementById('compareSlot2Badge').classList.add('hidden');
+            document.getElementById('compareResultsSection').classList.add('hidden');
+            document.getElementById('compareWaitingBanner').classList.remove('hidden');
+            document.getElementById('compareWaitingText').innerHTML = `Carica entrambi i file Excel negli slot qui sopra (oppure clicca su <strong class="text-[#c2410c]">"Carica Esempio Confronto (Demo)"</strong>) per avviare automaticamente il confronto sulla colonna <strong>Codice</strong>.`;
+            resetCompareBtn.classList.add('hidden');
+        });
+
+        function runAnagraficheComparison() {
+            const waitingBanner = document.getElementById('compareWaitingBanner');
+            const waitingText = document.getElementById('compareWaitingText');
+            const resultsSection = document.getElementById('compareResultsSection');
+
+            if (!compareDataset1 || !compareDataset2) {
+                waitingBanner.classList.remove('hidden');
+                resultsSection.classList.add('hidden');
+                if (compareDataset1 && !compareDataset2) {
+                    waitingText.innerHTML = `File 1 (<strong class="text-slate-900">${escapeHtml(compareDataset1.fileName)}</strong>) caricato. Ora carica il <strong>Nuovo Tracciato da Importare</strong> nello Slot 2 a destra.`;
+                } else if (!compareDataset1 && compareDataset2) {
+                    waitingText.innerHTML = `File 2 (<strong class="text-[#c2410c]">${escapeHtml(compareDataset2.fileName)}</strong>) caricato. Ora carica il <strong>Tracciato Attualmente a Sistema (SI-ACT)</strong> nello Slot 1 a sinistra.`;
+                }
+                return;
+            }
+
+            waitingBanner.classList.add('hidden');
+            resultsSection.classList.remove('hidden');
+
+            const mapSystem = new Map();
+            compareDataset1.rows.forEach(r => {
+                if (!mapSystem.has(r.code)) mapSystem.set(r.code, r);
+            });
+
+            const mapNew = new Map();
+            compareDataset2.rows.forEach(r => {
+                if (!mapNew.has(r.code)) mapNew.set(r.code, r);
+            });
+
+            const diffs = [];
+            let addedCount = 0;
+            let removedCount = 0;
+            let unchangedCount = 0;
+
+            mapNew.forEach((rowObj, code) => {
+                if (!mapSystem.has(code)) {
+                    addedCount++;
+                    diffs.push({
+                        type: 'ADDED',
+                        origin: 'Nuovo Tracciato',
+                        code: rowObj.code,
+                        cols: rowObj.cols
+                    });
+                } else {
+                    unchangedCount++;
+                }
+            });
+
+            mapSystem.forEach((rowObj, code) => {
+                if (!mapNew.has(code)) {
+                    removedCount++;
+                    diffs.push({
+                        type: 'REMOVED',
+                        origin: 'Sistema SI-ACT',
+                        code: rowObj.code,
+                        cols: rowObj.cols
+                    });
+                }
+            });
+
+            compareDiffResults = diffs;
+            compareStats = {
+                sysCount: compareDataset1.rows.length,
+                newCount: compareDataset2.rows.length,
+                added: addedCount,
+                removed: removedCount,
+                unchanged: unchangedCount
+            };
+
+            const totalDiff = addedCount + removedCount;
+            document.getElementById('kpiTotalDiff').textContent = totalDiff.toLocaleString('it-IT');
+            document.getElementById('kpiAddedCount').textContent = `+${addedCount.toLocaleString('it-IT')}`;
+            document.getElementById('kpiRemovedCount').textContent = `-${removedCount.toLocaleString('it-IT')}`;
+            document.getElementById('kpiSysRows').textContent = `${compareDataset1.rows.length} righe`;
+            document.getElementById('kpiNewRows').textContent = `${compareDataset2.rows.length} righe`;
+            document.getElementById('kpiUnchangedRows').textContent = unchangedCount.toLocaleString('it-IT');
+
+            document.getElementById('badgeFilterAll').textContent = totalDiff;
+            document.getElementById('badgeFilterAdded').textContent = addedCount;
+            document.getElementById('badgeFilterRemoved').textContent = removedCount;
+
+            const dupAlert = document.getElementById('compareDuplicatesAlert');
+            const dupText = document.getElementById('compareDuplicatesText');
+            const dupMessages = [];
+            if (compareDataset1.duplicates.length > 0) {
+                dupMessages.push(`<strong>Tracciato SI-ACT:</strong> rilevati ${compareDataset1.duplicates.length} codici duplicati (${compareDataset1.duplicates.slice(0, 5).join(', ')}).`);
+            }
+            if (compareDataset2.duplicates.length > 0) {
+                dupMessages.push(`<strong>Nuovo Tracciato:</strong> rilevati ${compareDataset2.duplicates.length} codici duplicati (${compareDataset2.duplicates.slice(0, 5).join(', ')}).`);
+            }
+            if (dupMessages.length > 0) {
+                dupText.innerHTML = dupMessages.join(' ');
+                dupAlert.classList.remove('hidden');
+            } else {
+                dupAlert.classList.add('hidden');
+            }
+
+            currentCompareFilter = 'ALL';
+            compareSearchInput.value = '';
+            updateCompareFilterButtonsUI();
+            renderCompareTable();
+        }
+
+        function setCompareFilter(filterType) {
+            currentCompareFilter = filterType;
+            updateCompareFilterButtonsUI();
+            renderCompareTable();
+        }
+
+        function updateCompareFilterButtonsUI() {
+            const btnAll = document.getElementById('filterDiffAll');
+            const btnAdded = document.getElementById('filterDiffAdded');
+            const btnRemoved = document.getElementById('filterDiffRemoved');
+
+            btnAll.className = currentCompareFilter === 'ALL'
+                ? 'px-3.5 py-2 rounded-xl text-xs font-bold bg-[#28333a] text-[#f3e0b5] shadow-xs transition-all'
+                : 'px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-100 text-[#28333a] hover:bg-slate-200 transition-all';
+
+            btnAdded.className = currentCompareFilter === 'ADDED'
+                ? 'px-3.5 py-2 rounded-xl text-xs font-bold bg-[#16a34a] text-white shadow-xs transition-all'
+                : 'px-3.5 py-2 rounded-xl text-xs font-bold bg-[#dcfce7] text-green-800 border border-green-300 hover:bg-green-200/70 transition-all';
+
+            btnRemoved.className = currentCompareFilter === 'REMOVED'
+                ? 'px-3.5 py-2 rounded-xl text-xs font-bold bg-[#dc2626] text-white shadow-xs transition-all'
+                : 'px-3.5 py-2 rounded-xl text-xs font-bold bg-[#fee2e2] text-red-800 border border-red-300 hover:bg-red-200/70 transition-all';
+        }
+
+        compareSearchInput.addEventListener('input', () => {
+            renderCompareTable();
+        });
+
+        function renderCompareTable() {
+            const zeroDiffBox = document.getElementById('compareZeroDiffBox');
+            const tableWrapper = document.getElementById('compareTableWrapper');
+            const tbody = document.getElementById('compareTableBody');
+            const countLabel = document.getElementById('compareTableCountLabel');
+
+            if (compareDiffResults.length === 0) {
+                zeroDiffBox.classList.remove('hidden');
+                tableWrapper.classList.add('hidden');
+                countLabel.textContent = '0 differenze';
+                return;
+            }
+
+            zeroDiffBox.classList.add('hidden');
+            tableWrapper.classList.remove('hidden');
+
+            const query = compareSearchInput.value.trim().toLowerCase();
+            const filtered = compareDiffResults.filter(item => {
+                if (currentCompareFilter === 'ADDED' && item.type !== 'ADDED') return false;
+                if (currentCompareFilter === 'REMOVED' && item.type !== 'REMOVED') return false;
+                if (query) {
+                    const codeMatch = item.code.toLowerCase().includes(query);
+                    const descMatch = (item.cols[1] || '').toLowerCase().includes(query);
+                    const parentMatch = (item.cols[2] || '').toLowerCase().includes(query);
+                    return codeMatch || descMatch || parentMatch;
+                }
+                return true;
+            });
+
+            countLabel.textContent = `${filtered.length} di ${compareDiffResults.length} righe differenti visualizzate`;
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="7" class="py-8 text-center text-slate-400 font-sans text-sm">Nessuna riga corrisponde ai filtri selezionati.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = filtered.map(item => {
+                const isAdded = item.type === 'ADDED';
+                const rowBg = isAdded ? 'bg-[#dcfce7]/85 hover:bg-[#dcfce7]' : 'bg-[#fee2e2]/85 hover:bg-[#fee2e2]';
+                const badgeHtml = isAdded
+                    ? `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-sans font-extrabold bg-green-100 text-green-900 border border-green-400">+ AGGIUNTA</span>`
+                    : `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-sans font-extrabold bg-red-100 text-red-900 border border-red-400">- IN MENO (RIMOSSO)</span>`;
+
+                const textColor = isAdded ? 'text-green-950' : 'text-red-950';
+                const c0 = escapeHtml(item.cols[0] || '');
+                const c1 = escapeHtml(item.cols[1] || '');
+                const c2 = escapeHtml(item.cols[2] || '');
+                const c3 = escapeHtml(item.cols[3] || '');
+                const c4 = escapeHtml(item.cols[4] || '');
+
+                return `<tr class="${rowBg} ${textColor} transition-colors">
+                    <td class="py-2.5 px-4 whitespace-nowrap">${badgeHtml}</td>
+                    <td class="py-2.5 px-4 whitespace-nowrap font-sans text-xs font-semibold">${escapeHtml(item.origin)}</td>
+                    <td class="py-2.5 px-4 whitespace-nowrap font-bold">${c0}</td>
+                    <td class="py-2.5 px-4 font-sans">${c1}</td>
+                    <td class="py-2.5 px-4 whitespace-nowrap">${c2 || '<span class="opacity-40">-</span>'}</td>
+                    <td class="py-2.5 px-4 whitespace-nowrap">${c3 || '<span class="opacity-40">-</span>'}</td>
+                    <td class="py-2.5 px-4 whitespace-nowrap">${c4 || '<span class="opacity-40">-</span>'}</td>
+                </tr>`;
+            }).join('');
+        }
+
+        exportCompareXlsxBtn.addEventListener('click', () => {
+            if (!compareDataset1 || !compareDataset2) return;
+
+            const maxExtraCols = Math.max(compareDataset1.maxCols, compareDataset2.maxCols, 5);
+            const detailHeaders = [
+                "STATO",
+                "ORIGINE_FILE",
+                "CODICE",
+                "DESCRIZIONE",
+                "CODICE_PADRE",
+                "INIZIO_VALIDITA",
+                "FINE_VALIDITA"
+            ];
+
+            for (let extraIdx = 5; extraIdx < maxExtraCols; extraIdx++) {
+                detailHeaders.push(`COLONNA_EXTRA_${extraIdx + 1}`);
+            }
+
+            const detailRowsAoa = [detailHeaders];
+
+            compareDiffResults.forEach(item => {
+                const statoLabel = item.type === 'ADDED' ? 'AGGIUNTA' : 'IN MENO';
+                const rowData = [
+                    statoLabel,
+                    item.origin,
+                    item.cols[0] || '',
+                    item.cols[1] || '',
+                    item.cols[2] || '',
+                    item.cols[3] || '',
+                    item.cols[4] || ''
+                ];
+                for (let extraIdx = 5; extraIdx < maxExtraCols; extraIdx++) {
+                    rowData.push(item.cols[extraIdx] || '');
+                }
+                detailRowsAoa.push(rowData);
+            });
+
+            const wsDetail = XLSX.utils.aoa_to_sheet(detailRowsAoa);
+            wsDetail['!cols'] = [
+                { wch: 14 },
+                { wch: 20 },
+                { wch: 16 },
+                { wch: 45 },
+                { wch: 16 },
+                { wch: 18 },
+                { wch: 18 }
+            ];
+
+            const nowStr = new Date().toLocaleString('it-IT');
+            const summaryAoa = [
+                ["REPORT CONFRONTO ANAGRAFICHE (DELTA SI-ACT)", ""],
+                ["Data e Ora Elaborazione", nowStr],
+                ["File 1 - Attualmente a Sistema (SI-ACT)", compareDataset1.fileName],
+                ["File 2 - Nuovo Tracciato da Importare", compareDataset2.fileName],
+                ["", ""],
+                ["INDICATORE", "VALORE"],
+                ["Righe nel Tracciato a Sistema (SI-ACT)", compareStats.sysCount],
+                ["Righe nel Nuovo Tracciato", compareStats.newCount],
+                ["Codici Invariati", compareStats.unchanged],
+                ["Totale Righe Differenti", compareStats.added + compareStats.removed],
+                ["Nuove Righe (AGGIUNTE)", compareStats.added],
+                ["Righe in Meno (RIMOSSE)", compareStats.removed]
+            ];
+
+            const wsSummary = XLSX.utils.aoa_to_sheet(summaryAoa);
+            wsSummary['!cols'] = [{ wch: 42 }, { wch: 36 }];
+
+            const wbOut = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wbOut, wsDetail, "Dettaglio_Differenze");
+            XLSX.utils.book_append_sheet(wbOut, wsSummary, "Riepilogo");
+
+            const todayIso = getTodayIso();
+            const exportFileName = `Delta_Anagrafiche_SIACT_${todayIso}.xlsx`;
+            XLSX.writeFile(wbOut, exportFileName);
+
+            showToast(`Report Excel "${exportFileName}" esportato con successo!`);
+        });
+
+        // Inizializzazione stato UI default al caricamento
+        updateDateSelectUI();
+        updateCodeRuleBuilderUI();
+    </script>
+</body>
+</html>
