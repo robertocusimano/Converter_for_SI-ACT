@@ -1770,15 +1770,26 @@
             const rawRows = [];
             let maxDetectedCols = 0;
 
+            // Legge rigorosamente fino alla colonna necessaria:
+            // - 3 colonne (indici 0, 1, 2: CODICE, DESCRIZIONE, CODICE PADRE) se optThreeColsWithParent è attivo
+            // - 5 colonne (indici 0..4) altrimenti
+            const targetColsCount = threeColsWithParent ? 3 : 5;
+
             for (let R = range.s.r; R <= range.e.r; ++R) {
                 const rowCells = [];
                 let rowHasContent = false;
-                const endCol = threeColsWithParent ? Math.max(range.e.c, 2) : Math.max(range.e.c, 4);
+                const endCol = Math.max(range.e.c, targetColsCount - 1);
 
                 for (let C = 0; C <= endCol; ++C) {
                     const cellAddress = XLSX.utils.encode_cell({ r: R, c: C });
                     const cellObj = worksheet[cellAddress];
-                    const val = extractCellString(cellObj);
+                    let val = extractCellString(cellObj);
+
+                    // Normalizza le date SOLO nelle colonne 3 e 4 (4ª e 5ª colonna) quando non è attivo il tracciato a 3 colonne
+                    if (!threeColsWithParent && (C === 3 || C === 4) && val !== '') {
+                        val = normalizeDateValue(val, cellObj);
+                    }
+
                     if (val !== '') {
                         rowHasContent = true;
                         if (C + 1 > maxDetectedCols) maxDetectedCols = C + 1;
@@ -1863,9 +1874,9 @@
                     sanitizedDescCount++;
                     anyHighlightApplied = true;
                 }
-
-                // Colonna 3: CODICE PADRE
-                const col2 = r[2] ? r[2].val : '';
+                // Colonna 3: CODICE PADRE (indice 2) - mai sovrascritta con date
+                const rawCol2 = (!threeColsWithParent && r[2]) ? r[2].val : (r[2] ? r[2].val : '');
+                const col2 = isValidIsoDate(rawCol2) ? '' : rawCol2;
 
                 // Colonne 4 e 5: DATE (se il flag 3 colonne è attivo, nel file Excel non ci sono date quindi partono vuote)
                 const excelCol3 = (!threeColsWithParent && r[3]) ? normalizeDateValue(r[3].val, r[3]?.cellObj) : '';
